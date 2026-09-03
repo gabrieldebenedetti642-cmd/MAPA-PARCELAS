@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Mapa de Parcelas</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%BA%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root{
+    --bg-dark:#1C2620;
+    --bg-dark-t:rgba(23,31,26,0.92);
+    --bg-card:#233028;
+    --text-light:#F5F3EE;
+    --text-muted:#AEBAB2;
+    --border:rgba(245,243,238,0.12);
+    --campo:#4A90D9;
+    --parcela:#E8871E;
+    --linea:#E23D3D;
+    --danger:#E05555;
+    --radius:12px;
+    --radius-sm:8px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;overscroll-behavior:none;}
+  body{
+    display:flex;flex-direction:column;height:100vh;height:100dvh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg-dark);color:var(--text-light);
+    overflow:hidden;
+  }
+  button{font-family:inherit;}
+  /* ---------- Header ---------- */
+  header{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;
+    background:var(--bg-dark-t);border-bottom:1px solid var(--border);
+    position:relative;z-index:500;
+  }
+  header h1{font-size:16px;font-weight:600;margin:0;letter-spacing:0.2px;}
+  .header-actions{display:flex;gap:6px;align-items:center;}
+  .icon-btn{
+    width:38px;height:38px;border-radius:50%;border:none;
+    background:rgba(245,243,238,0.08);color:var(--text-light);
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+  }
+  .icon-btn:active{background:rgba(245,243,238,0.18);}
+  .badge{
+    position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 3px;
+    background:var(--parcela);color:#1C2620;font-size:10px;font-weight:700;
+    border-radius:8px;display:flex;align-items:center;justify-content:center;
+  }
+  /* ---------- Map area ---------- */
+  #mapWrap{flex:1 1 auto;min-height:0;position:relative;}
+  #map{position:absolute;inset:0;background:#0d1310;}
+  .leaflet-control-attribution{
+    font-size:9px !important;background:rgba(23,31,26,0.55) !important;color:var(--text-muted) !important;
+  }
+  .leaflet-control-attribution a{color:var(--text-muted) !important;}
+  .leaflet-control-zoom{border:none !important;margin-top:10px !important;}
+  .leaflet-control-zoom a{
+    background:var(--bg-dark-t) !important;color:var(--text-light) !important;border-color:var(--border) !important;
+  }
+  .fab-locate{
+    position:absolute;right:12px;bottom:14px;z-index:400;
+    width:44px;height:44px;border-radius:50%;border:1px solid var(--border);
+    background:var(--bg-dark-t);color:var(--text-light);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+  }
+  .fab-locate:active{background:rgba(245,243,238,0.15);}
+  /* instruction toast while drawing */
+  #drawToast{
+    position:absolute;top:10px;left:10px;right:10px;z-index:450;
+    background:var(--bg-dark-t);border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:10px 12px;font-size:13.5px;line-height:1.35;display:none;
+  }
+  #drawToast.show{display:block;}
+  #drawToast strong{color:var(--type-color,var(--parcela));}
+  #drawToast .pcount{color:var(--text-muted);font-size:12px;margin-top:2px;display:block;}
+  /* small vertex markers while drawing */
+  .vertex-dot{
+    width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--type-color,var(--parcela));
+  }
+  .shape-label{
+    background:rgba(23,31,26,0.85) !important;border:1px solid var(--border) !important;
+    color:var(--text-light) !important;font-weight:600;font-size:12px;
+    padding:2px 7px !important;border-radius:6px !important;box-shadow:none !important;
+  }
+  .shape-label::before{display:none !important;}
+  /* ---------- Bottom toolbar ---------- */
+  #toolbarZone{
+    flex:0 0 auto;background:var(--bg-dark-t);border-top:1px solid var(--border);
+    padding:10px 10px calc(env(safe-area-inset-bottom,0px) + 10px);
+    position:relative;z-index:500;
+  }
+  #toolbarDefault{display:flex;gap:8px;}
+  .type-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:10px 4px 8px;border-radius:var(--radius);border:1px solid var(--border);
+    background:rgba(245,243,238,0.05);color:var(--text-light);
+  }
+  .type-btn:active{background:rgba(245,243,238,0.14);}
+  .type-btn svg{width:22px;height:22px;}
+  .type-btn span{font-size:12.5px;font-weight:600;}
+  .type-btn.campo svg{color:var(--campo);}
+  .type-btn.parcela svg{color:var(--parcela);}
+  .type-btn.linea svg{color:var(--linea);}
+  #toolbarDrawing{display:none;gap:8px;align-items:stretch;}
+  #toolbarDrawing.show{display:flex;}
+  .draw-btn{
+    border-radius:var(--radius);border:1px solid var(--border);
+    background:rgba(245,243,238,0.05);color:var(--text-light);
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    font-size:13.5px;font-weight:600;padding:0 10px;height:48px;
+  }
+  .draw-btn svg{width:18px;height:18px;}
+  .draw-btn.secondary{flex:0 0 auto;width:48px;}
+  .draw-btn.grow{flex:1;}
+  .draw-btn.primary{background:var(--type-color,var(--parcela));color:#17211c;border-color:transparent;}
+  .draw-btn.primary[disabled]{opacity:0.35;}
+  /* ---------- Modal ---------- */
+  .backdrop{
+    position:fixed;inset:0;background:rgba(10,14,11,0.6);z-index:900;
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  .backdrop.show{display:flex;}
+  .sheet{
+    width:100%;max-width:480px;background:var(--bg-card);border-radius:16px 16px 0 0;
+    padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 16px);
+    max-height:82vh;display:flex;flex-direction:column;
+    border-top:1px solid var(--border);
+  }
+  .sheet-center{align-self:center;margin:auto;border-radius:16px;max-width:400px;}
+  .sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 12px;}
+  .sheet h2{font-size:16px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;}
+  .sheet h2 .close-x{width:30px;height:30px;border-radius:50%;background:rgba(245,243,238,0.08);border:none;color:var(--text-light);display:flex;align-items:center;justify-content:center;}
+  .field-label{font-size:12.5px;color:var(--text-muted);margin-bottom:6px;display:block;}
+  .text-input{
+    width:100%;padding:12px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
+    background:rgba(245,243,238,0.06);color:var(--text-light);font-size:16px;margin-bottom:12px;
+  }
+  .text-input:focus{outline:2px solid var(--type-color,var(--parcela));}
+  .area-line{
+    font-size:14px;color:var(--text-muted);margin:-4px 0 14px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .area-line b{color:var(--text-light);font-size:15px;}
+  .btn-row{display:flex;gap:10px;}
+  .btn{flex:1;height:46px;border-radius:var(--radius-sm);border:1px solid var(--border);background:rgba(245,243,238,0.05);color:var(--text-light);font-size:14.5px;font-weight:600;}
+  .btn.primary{background:var(--type-color,var(--parcela));color:#17211c;border-color:transparent;}
+  .btn.danger{background:var(--danger);color:#2a0d0d;border-color:transparent;}
+  /* list */
+  .summary-line{font-size:13px;color:var(--text-muted);margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  .list-scroll{overflow-y:auto;flex:1;}
+  .group-title{font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-muted);margin:14px 0 6px;}
+  .group-title:first-child{margin-top:0;}
+  .row-item{
+    display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);
+  }
+  .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .row-item .info{flex:1;min-width:0;}
+  .row-item .name{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row-item .area{font-size:12.5px;color:var(--text-muted);}
+  .row-item .row-actions{display:flex;gap:4px;}
+  .row-actions button{width:34px;height:34px;border-radius:8px;border:none;background:rgba(245,243,238,0.06);color:var(--text-light);display:flex;align-items:center;justify-content:center;}
+  .row-actions button.del{color:var(--danger);}
+  .empty-state{text-align:center;padding:30px 10px;color:var(--text-muted);font-size:14px;line-height:1.5;}
+  /* menu popover */
+  .menu-pop{
+    position:absolute;top:calc(env(safe-area-inset-top,0px) + 52px);right:14px;z-index:600;
+    background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
+    min-width:170px;display:none;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.4);
+  }
+  .menu-pop.show{display:block;}
+  .menu-pop button{
+    width:100%;text-align:left;padding:12px 14px;background:none;border:none;color:var(--text-light);
+    font-size:14px;display:block;
+  }
+  .menu-pop button:active{background:rgba(245,243,238,0.08);}
+  .menu-pop button.danger-text{color:var(--danger);}
+  .menu-pop hr{border:none;border-top:1px solid var(--border);margin:0;}
+  .you-marker{width:16px;height:16px;border-radius:50%;background:#4A90D9;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,217,0.35);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="appTitle">Mapa de Parcelas</h1>
+  <div class="header-actions">
+    <button class="icon-btn" id="listBtn" aria-label="Lista">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6H20M4 12H20M4 18H14"/></svg>
+      <span class="badge" id="listBadge" style="display:none;">0</span>
+    </button>
+    <button class="icon-btn" id="menuBtn" aria-label="Menú">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="19" r="1.7" fill="currentColor"/></svg>
+    </button>
+  </div>
+</header>
+
+<div id="menuPop" class="menu-pop">
+  <button id="exportBtn">Exportar lista</button>
+  <hr>
+  <button id="clearAllBtn" class="danger-text">Borrar todo</button>
+</div>
+
+<div id="mapWrap">
+  <div id="map"></div>
+  <div id="drawToast">
+    <strong id="drawToastTitle">Parcela</strong>: tocá el mapa para marcar los vértices
+    <span class="pcount" id="drawToastCount">0 puntos</span>
+  </div>
+  <button class="fab-locate" id="locateBtn" aria-label="Mi ubicación">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22"/></svg>
+  </button>
+</div>
+
+<div id="toolbarZone">
+  <div id="toolbarDefault">
+    <button class="type-btn campo" data-type="campo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 10 L9 4 L18 6 L20 16 L12 20 L4 16 Z"/></svg>
+      <span>Campo</span>
+    </button>
+    <button class="type-btn parcela" data-type="parcela">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 6 L16 5 L19 13 L11 19 L4 15 Z"/><circle cx="11" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg>
+      <span>Parcela</span>
+    </button>
+    <button class="type-btn linea" data-type="linea">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 10 L13 14 L21 5"/></svg>
+      <span>Línea</span>
+    </button>
+  </div>
+  <div id="toolbarDrawing">
+    <button class="draw-btn secondary" id="undoBtn" aria-label="Deshacer último punto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9L9 4"/><path d="M4 9H14A6 6 0 0 1 14 21H11"/></svg>
+    </button>
+    <button class="draw-btn grow" id="cancelDrawBtn">Cancelar</button>
+    <button class="draw-btn grow primary" id="finishDrawBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12L9 17L20 6"/></svg>
+      Listo
+    </button>
+  </div>
+</div>
+
+<!-- Naming modal -->
+<div class="backdrop" id="nameBackdrop">
+  <div class="sheet sheet-center">
+    <h2 id="nameModalTitle">Nueva Parcela</h2>
+    <span class="field-label">Nombre / número</span>
+    <input type="text" class="text-input" id="nameInput" maxlength="40">
+    <div class="area-line" id="areaLine" style="display:none;">Área calculada: <b id="areaValue">0 ha</b></div>
+    <div class="btn-row">
+      <button class="btn" id="nameCancelBtn">Cancelar</button>
+      <button class="btn primary" id="nameSaveBtn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- List modal -->
+<div class="backdrop" id="listBackdrop">
+  <div class="sheet" style="height:78vh;">
+    <div class="sheet-handle"></div>
+    <h2>Elementos
+      <button class="close-x" id="listCloseBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
+      </button>
+    </h2>
+    <div class="summary-line" id="summaryLine">Todavía no hay nada marcado.</div>
+    <div class="list-scroll" id="listScroll"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = 'mapaParcelas_v1';
+  var TYPE_INFO = {
+    campo:   { label:'Campo',   color:'#4A90D9', isPolygon:true,  minPoints:3 },
+    parcela: { label:'Parcela', color:'#E8871E', isPolygon:true,  minPoints:3 },
+    linea:   { label:'Línea',   color:'#E23D3D', isPolygon:false, minPoints:2 }
+  };
+
+  var shapes = [];          // saved shapes {id,type,name,points,areaHa}
+  var layerById = {};       // id -> leaflet layer
+  var map, drawnLayerGroup;
+  var mode = null;
+  var drawPoints = [];      // array of L.LatLng
+  var tempMarkers = [];
+  var tempPreviewLayer = null;
+  var pendingArea = null;
+  var youMarker = null;
+
+  // ---------- persistence ----------
+  function loadShapes(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveShapes(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
+  }
+
+  // ---------- geometry ----------
+  function computeAreaHa(latlngs){
+    if(latlngs.length < 3) return 0;
+    var R = 6378137;
+    var latAvg = latlngs.reduce(function(s,p){return s+p.lat;},0) / latlngs.length * Math.PI/180;
+    var pts = latlngs.map(function(p){
+      return {
+        x: R * (p.lng * Math.PI/180) * Math.cos(latAvg),
+        y: R * (p.lat * Math.PI/180)
+      };
+    });
+    var area = 0;
+    for(var i=0;i<pts.length;i++){
+      var j=(i+1)%pts.length;
+      area += pts[i].x*pts[j].y - pts[j].x*pts[i].y;
+    }
+    return Math.abs(area)/2/10000;
+  }
+
+  function fmtHa(n){
+    return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ha';
+  }
+
+  // ---------- map setup ----------
+  function initMap(){
+    map = L.map('map', { attributionControl:false, zoomControl:true, zoomControlPosition:'topright' });
+    L.control.zoom({position:'topright'}).addTo(map);
+    L.control.attribution({position:'bottomleft', prefix:false})
+      .addAttribution('Imágenes © Esri, Maxar, Earthstar Geographics')
+      .addTo(map);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 20,
+      maxNativeZoom: 19
+    }).addTo(map);
+
+    drawnLayerGroup = L.layerGroup().addTo(map);
+    map.setView([-34.6, -63.5], 6);
+
+    map.on('click', onMapClick);
+
+    // try silent initial geolocation
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(function(pos){
+        map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+      }, function(){ /* silent fail on load */ }, { timeout:6000 });
+    }
+  }
+
+  function vertexIcon(color){
+    return L.divIcon({ className:'', html:'<div class="vertex-dot" style="--type-color:'+color+'"></div>', iconSize:[10,10] });
+  }
+
+  function renderShapeOnMap(shape){
+    var info = TYPE_INFO[shape.type];
+    var latlngs = shape.points.map(function(p){ return L.latLng(p[0], p[1]); });
+    var layer;
+    if(info.isPolygon){
+      layer = L.polygon(latlngs, { color: info.color, weight:2, fillColor: info.color, fillOpacity:0.18 });
+    } else {
+      layer = L.polyline(latlngs, { color: info.color, weight:4 });
+    }
+    layer.bindTooltip(shape.name, { permanent:true, direction:'center', className:'shape-label' });
+    layer.addTo(drawnLayerGroup);
+    layerById[shape.id] = layer;
+  }
+
+  function redrawAll(){
+    drawnLayerGroup.clearLayers();
+    layerById = {};
+    shapes.forEach(renderShapeOnMap);
+    updateListBadge();
+  }
+
+  // ---------- drawing flow ----------
+  function startDrawing(type){
+    mode = type;
+    drawPoints = [];
+    clearTempLayers();
+    var info = TYPE_INFO[type];
+    document.getElementById('toolbarDefault').style.display = 'none';
+    var dt = document.getElementById('toolbarDrawing');
+    dt.classList.add('show');
+    dt.style.setProperty('--type-color', info.color);
+    var finishBtn = document.getElementById('finishDrawBtn');
+    finishBtn.style.setProperty('--type-color', info.color);
+    var toast = document.getElementById('drawToast');
+    toast.style.setProperty('--type-color', info.color);
+    toast.classList.add('show');
+    document.getElementById('drawToastTitle').textContent = info.label;
+    updateDrawUI();
+  }
+
+  function updateDrawUI(){
+    var info = TYPE_INFO[mode];
+    var n = drawPoints.length;
+    document.getElementById('drawToastCount').textContent =
+      n + (n===1 ? ' punto' : ' puntos') + (n < info.minPoints ? ' (mínimo ' + info.minPoints + ')' : '');
+    document.getElementById('finishDrawBtn').disabled = n < info.minPoints;
+  }
+
+  function onMapClick(e){
+    if(!mode) return;
+    drawPoints.push(e.latlng);
+    var m = L.marker(e.latlng, { icon: vertexIcon(TYPE_INFO[mode].color), interactive:false }).addTo(map);
+    tempMarkers.push(m);
+    updatePreview();
+    updateDrawUI();
+  }
+
+  function updatePreview(){
+    if(tempPreviewLayer){ map.removeLayer(tempPreviewLayer); tempPreviewLayer = null; }
+    if(drawPoints.length >= 2){
+      tempPreviewLayer = L.polyline(drawPoints, { color: TYPE_INFO[mode].color, weight:2, dashArray:'6,6' }).addTo(map);
+    }
+  }
+
+  function clearTempLayers(){
+    tempMarkers.forEach(function(m){ map.removeLayer(m); });
+    tempMarkers = [];
+    if(tempPreviewLayer){ map.removeLayer(tempPreviewLayer); tempPreviewLayer = null; }
+  }
+
+  function undoLastPoint(){
+    if(!drawPoints.length) return;
+    drawPoints.pop();
+    var last = tempMarkers.pop();
+    if(last) map.removeLayer(last);
+    updatePreview();
+    updateDrawUI();
+  }
+
+  function cancelDrawing(){
+    clearTempLayers();
+    drawPoints = [];
+    mode = null;
+    document.getElementById('toolbarDefault').style.display = 'flex';
+    document.getElementById('toolbarDrawing').classList.remove('show');
+    document.getElementById('drawToast').classList.remove('show');
+  }
+
+  function suggestName(type){
+    var count = shapes.filter(function(s){ return s.type===type; }).length;
+    return TYPE_INFO[type].label + ' ' + (count+1);
+  }
+
+  function finishDrawing(){
+    var info = TYPE_INFO[mode];
+    if(drawPoints.length < info.minPoints) return;
+    pendingArea = info.isPolygon ? computeAreaHa(drawPoints) : null;
+    document.getElementById('nameModalTitle').textContent = 'Nueva ' + info.label;
+    var input = document.getElementById('nameInput');
+    input.value = suggestName(mode);
+    var areaLine = document.getElementById('areaLine');
+    if(pendingArea !== null){
+      areaLine.style.display = 'flex';
+      document.getElementById('areaValue').textContent = fmtHa(pendingArea);
+    } else {
+      areaLine.style.display = 'none';
+    }
+    document.getElementById('nameSaveBtn').style.setProperty('--type-color', info.color);
+    document.getElementById('nameBackdrop').classList.add('show');
+    setTimeout(function(){ input.focus(); input.select(); }, 80);
+  }
+
+  function confirmSaveShape(){
+    var name = document.getElementById('nameInput').value.trim() || suggestName(mode);
+    var shape = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      type: mode,
+      name: name,
+      points: drawPoints.map(function(ll){ return [ll.lat, ll.lng]; }),
+      areaHa: pendingArea
+    };
+    shapes.push(shape);
+    saveShapes();
+    renderShapeOnMap(shape);
+    updateListBadge();
+    document.getElementById('nameBackdrop').classList.remove('show');
+    cancelDrawing();
+  }
+
+  // ---------- list modal ----------
+  function updateListBadge(){
+    var badge = document.getElementById('listBadge');
+    if(shapes.length){
+      badge.style.display = 'flex';
+      badge.textContent = shapes.length;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  function openListModal(){
+    renderListContent();
+    document.getElementById('listBackdrop').classList.add('show');
+  }
+  function closeListModal(){
+    document.getElementById('listBackdrop').classList.remove('show');
+  }
+
+  function renderListContent(){
+    var scroll = document.getElementById('listScroll');
+    var summary = document.getElementById('summaryLine');
+    scroll.innerHTML = '';
+
+    if(!shapes.length){
+      summary.textContent = 'Todavía no hay nada marcado.';
+      scroll.innerHTML = '<div class="empty-state">Tocá <b>Campo</b>, <b>Parcela</b> o <b>Línea</b> abajo para empezar a marcar en el mapa.</div>';
+      return;
+    }
+
+    var counts = { campo:0, parcela:0, linea:0 };
+    var parcelaHaTotal = 0;
+    shapes.forEach(function(s){
+      counts[s.type]++;
+      if(s.type==='parcela' && s.areaHa) parcelaHaTotal += s.areaHa;
+    });
+    summary.textContent = counts.campo + ' campo' + (counts.campo!==1?'s':'') +
+      ' · ' + counts.parcela + ' parcela' + (counts.parcela!==1?'s':'') +
+      (counts.parcela ? ' (' + fmtHa(parcelaHaTotal) + ')' : '') +
+      ' · ' + counts.linea + ' línea' + (counts.linea!==1?'s':'');
+
+    ['campo','parcela','linea'].forEach(function(type){
+      var group = shapes.filter(function(s){ return s.type===type; });
+      if(!group.length) return;
+      var titleEl = document.createElement('div');
+      titleEl.className = 'group-title';
+      titleEl.textContent = TYPE_INFO[type].label + 's';
+      scroll.appendChild(titleEl);
+      group.forEach(function(s){
+        scroll.appendChild(buildRow(s));
+      });
+    });
+  }
+
+  function buildRow(s){
+    var info = TYPE_INFO[s.type];
+    var row = document.createElement('div');
+    row.className = 'row-item';
+    row.innerHTML =
+      '<div class="dot" style="background:'+info.color+'"></div>' +
+      '<div class="info"><div class="name"></div><div class="area">'+(s.areaHa!=null ? fmtHa(s.areaHa) : '—')+'</div></div>' +
+      '<div class="row-actions">' +
+        '<button class="go" aria-label="Ir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22"/></svg></button>' +
+        '<button class="del" aria-label="Borrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7H20M9 7V4H15V7M6 7L7 20H17L18 7"/></svg></button>' +
+      '</div>';
+    row.querySelector('.name').textContent = s.name;
+    row.querySelector('.go').addEventListener('click', function(){ flyToShape(s.id); closeListModal(); });
+    row.querySelector('.del').addEventListener('click', function(){ deleteShape(s.id); });
+    return row;
+  }
+
+  function flyToShape(id){
+    var layer = layerById[id];
+    if(!layer) return;
+    map.flyToBounds(layer.getBounds(), { padding:[60,60], maxZoom:17 });
+  }
+
+  function deleteShape(id){
+    if(!confirm('¿Borrar este elemento del mapa?')) return;
+    var layer = layerById[id];
+    if(layer) drawnLayerGroup.removeLayer(layer);
+    delete layerById[id];
+    shapes = shapes.filter(function(s){ return s.id !== id; });
+    saveShapes();
+    updateListBadge();
+    renderListContent();
+  }
+
+  // ---------- export / clear ----------
+  function exportData(){
+    if(!shapes.length){ alert('Todavía no hay nada para exportar.'); return; }
+    var lines = ['Mapa de Parcelas — ' + new Date().toLocaleDateString('es-AR'), ''];
+    ['campo','parcela','linea'].forEach(function(type){
+      var group = shapes.filter(function(s){ return s.type===type; });
+      if(!group.length) return;
+      lines.push(TYPE_INFO[type].label + 's:');
+      group.forEach(function(s){
+        lines.push('- ' + s.name + (s.areaHa!=null ? ' — ' + fmtHa(s.areaHa) : ''));
+      });
+      lines.push('');
+    });
+    var parcelaHaTotal = shapes.filter(function(s){return s.type==='parcela';})
+      .reduce(function(a,s){return a + (s.areaHa||0);},0);
+    if(parcelaHaTotal) lines.push('Total parcelas: ' + fmtHa(parcelaHaTotal));
+    var text = lines.join('\n');
+
+    if(navigator.share){
+      navigator.share({ title:'Mapa de Parcelas', text:text }).catch(function(){});
+    } else {
+      var blob = new Blob([text], {type:'text/plain'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'mapa-parcelas.txt';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+    closeMenu();
+  }
+
+  function clearAllData(){
+    if(!confirm('¿Seguro que querés borrar todo lo marcado? Esta acción no se puede deshacer.')) return;
+    shapes = [];
+    saveShapes();
+    redrawAll();
+    renderListContent();
+    closeMenu();
+  }
+
+  // ---------- locate ----------
+  function locateMe(){
+    if(!navigator.geolocation){ alert('Este dispositivo no puede compartir su ubicación.'); return; }
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var ll = [pos.coords.latitude, pos.coords.longitude];
+      map.flyTo(ll, 16);
+      if(youMarker) map.removeLayer(youMarker);
+      youMarker = L.marker(ll, { icon: L.divIcon({className:'', html:'<div class="you-marker"></div>', iconSize:[16,16]}) }).addTo(map);
+    }, function(){
+      alert('No se pudo obtener tu ubicación. Revisá que el GPS y los permisos estén activados.');
+    }, { enableHighAccuracy:true, timeout:8000 });
+  }
+
+  // ---------- menu ----------
+  function closeMenu(){ document.getElementById('menuPop').classList.remove('show'); }
+
+  // ---------- wire up ----------
+  document.querySelectorAll('.type-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ startDrawing(btn.dataset.type); });
+  });
+  document.getElementById('undoBtn').addEventListener('click', undoLastPoint);
+  document.getElementById('cancelDrawBtn').addEventListener('click', cancelDrawing);
+  document.getElementById('finishDrawBtn').addEventListener('click', finishDrawing);
+
+  document.getElementById('nameCancelBtn').addEventListener('click', function(){
+    document.getElementById('nameBackdrop').classList.remove('show');
+  });
+  document.getElementById('nameSaveBtn').addEventListener('click', confirmSaveShape);
+  document.getElementById('nameInput').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') confirmSaveShape();
+  });
+
+  document.getElementById('listBtn').addEventListener('click', openListModal);
+  document.getElementById('listCloseBtn').addEventListener('click', closeListModal);
+  document.getElementById('listBackdrop').addEventListener('click', function(e){
+    if(e.target === this) closeListModal();
+  });
+
+  document.getElementById('menuBtn').addEventListener('click', function(e){
+    e.stopPropagation();
+    document.getElementById('menuPop').classList.toggle('show');
+  });
+  document.addEventListener('click', function(e){
+    var pop = document.getElementById('menuPop');
+    if(pop.classList.contains('show') && !pop.contains(e.target) && e.target.id!=='menuBtn'){
+      closeMenu();
+    }
+  });
+  document.getElementById('exportBtn').addEventListener('click', exportData);
+  document.getElementById('clearAllBtn').addEventListener('click', clearAllData);
+
+  document.getElementById('locateBtn').addEventListener('click', locateMe);
+
+  // ---------- init ----------
+  initMap();
+  shapes = loadShapes();
+  redrawAll();
+
+})();
+</script>
+</body>
+</html>
