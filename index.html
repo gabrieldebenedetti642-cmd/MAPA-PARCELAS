@@ -99,6 +99,20 @@
   #drawToast.show{display:block;}
   #drawToast strong{color:var(--type-color,var(--parcela));}
   #drawToast .pcount{color:var(--text-muted);font-size:12px;margin-top:2px;display:block;}
+  .toast-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .gps-toggle{
+    flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+    border:1px solid var(--border);background:rgba(245,243,238,0.08);color:var(--text-light);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .gps-toggle svg{width:18px;height:18px;}
+  .gps-toggle.active{background:var(--type-color,var(--parcela));color:#17211c;border-color:transparent;}
+  .gps-live-marker{width:16px;height:16px;border-radius:50%;background:#2196F3;border:3px solid #fff;box-shadow:0 0 0 4px rgba(33,150,243,0.35);position:relative;}
+  .gps-live-marker::after{
+    content:'';position:absolute;inset:-9px;border-radius:50%;border:2px solid rgba(33,150,243,0.55);
+    animation:gpsPulse 1.6s ease-out infinite;
+  }
+  @keyframes gpsPulse{0%{transform:scale(0.5);opacity:1;}100%{transform:scale(2.1);opacity:0;}}
   /* small vertex markers while drawing */
   .vertex-dot{
     width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--type-color,var(--parcela));
@@ -239,7 +253,12 @@
 <div id="mapWrap">
   <div id="map"></div>
   <div id="drawToast">
-    <strong id="drawToastTitle">Parcela</strong>: tocá el mapa para agregar vértices · arrastrá un punto para moverlo · tocalo para borrarlo
+    <div class="toast-top">
+      <div><strong id="drawToastTitle">Parcela</strong><span id="drawToastHint">: tocá el mapa para agregar vértices · arrastrá un punto para moverlo · tocalo para borrarlo</span></div>
+      <button class="gps-toggle" id="gpsToggleBtn" aria-label="Modo GPS">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21C12 21 19 14.5 19 9.5C19 5.9 15.9 3 12 3C8.1 3 5 5.9 5 9.5C5 14.5 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+      </button>
+    </div>
     <span class="pcount" id="drawToastCount">0 puntos</span>
   </div>
   <button class="fab-locate" id="locateBtn" aria-label="Mi ubicación">
@@ -323,6 +342,11 @@
   var tempPreviewLayer = null;
   var pendingArea = null;
   var youMarker = null;
+  var gpsWatchId = null;
+  var gpsLiveMarker = null;
+  var lastGpsPoint = null;
+  var GPS_MIN_DISTANCE = 6;   // meters between auto-added points
+  var GPS_MAX_ACCURACY = 25;  // ignore GPS readings worse than this many meters
 
   // ---------- persistence ----------
   function loadShapes(){
@@ -425,7 +449,18 @@
     toast.style.setProperty('--type-color', info.color);
     toast.classList.add('show');
     document.getElementById('drawToastTitle').textContent = info.label;
+    document.getElementById('gpsToggleBtn').classList.remove('active');
+    updateGpsHint();
     updateDrawUI();
+  }
+
+  function updateGpsHint(){
+    var hint = document.getElementById('drawToastHint');
+    if(gpsWatchId !== null){
+      hint.textContent = ': caminá el límite, se agregan puntos solos · también podés tocar el mapa';
+    } else {
+      hint.textContent = ': tocá el mapa para agregar vértices · arrastrá un punto para moverlo · tocalo para borrarlo';
+    }
   }
 
   function computeLengthM(latlngs){
@@ -497,11 +532,11 @@
     var color = TYPE_INFO[mode].color;
     var group = L.layerGroup();
     if(TYPE_INFO[mode].isPolygon && drawPoints.length >= 3){
-      L.polygon(drawPoints, { color:'#fff', weight:5, opacity:0.9, fill:false }).addTo(group);
-      L.polygon(drawPoints, { color:color, weight:3, fillColor:color, fillOpacity:0.15 }).addTo(group);
+      L.polygon(drawPoints, { color:'#fff', weight:7, opacity:1, fill:false }).addTo(group);
+      L.polygon(drawPoints, { color:color, weight:4, fillColor:color, fillOpacity:0.2 }).addTo(group);
     } else {
-      L.polyline(drawPoints, { color:'#fff', weight:5, opacity:0.9 }).addTo(group);
-      L.polyline(drawPoints, { color:color, weight:3 }).addTo(group);
+      L.polyline(drawPoints, { color:'#fff', weight:7, opacity:1 }).addTo(group);
+      L.polyline(drawPoints, { color:color, weight:4 }).addTo(group);
     }
     group.addTo(map);
     tempPreviewLayer = group;
@@ -519,12 +554,69 @@
   }
 
   function cancelDrawing(){
+    stopGpsTracking();
     clearTempLayers();
     drawPoints = [];
     mode = null;
     document.getElementById('toolbarDefault').style.display = 'flex';
     document.getElementById('toolbarDrawing').classList.remove('show');
     document.getElementById('drawToast').classList.remove('show');
+  }
+
+  // ---------- GPS tracking mode ----------
+  function toggleGps(){
+    if(gpsWatchId !== null) stopGpsTracking();
+    else startGpsTracking();
+  }
+
+  function startGpsTracking(){
+    if(!mode) return;
+    if(!navigator.geolocation){
+      alert('Este dispositivo no puede usar GPS.');
+      return;
+    }
+    document.getElementById('gpsToggleBtn').classList.add('active');
+    lastGpsPoint = drawPoints.length ? drawPoints[drawPoints.length-1] : null;
+    gpsWatchId = navigator.geolocation.watchPosition(onGpsPosition, onGpsError, {
+      enableHighAccuracy:true, maximumAge:1000, timeout:15000
+    });
+    updateGpsHint();
+  }
+
+  function stopGpsTracking(){
+    if(gpsWatchId !== null){
+      navigator.geolocation.clearWatch(gpsWatchId);
+      gpsWatchId = null;
+    }
+    document.getElementById('gpsToggleBtn').classList.remove('active');
+    if(gpsLiveMarker){ map.removeLayer(gpsLiveMarker); gpsLiveMarker = null; }
+    updateGpsHint();
+  }
+
+  function onGpsPosition(pos){
+    var latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+    if(!gpsLiveMarker){
+      gpsLiveMarker = L.marker(latlng, { icon: L.divIcon({className:'', html:'<div class="gps-live-marker"></div>', iconSize:[16,16]}), interactive:false }).addTo(map);
+    } else {
+      gpsLiveMarker.setLatLng(latlng);
+    }
+    map.panTo(latlng, { animate:true });
+
+    if(pos.coords.accuracy && pos.coords.accuracy > GPS_MAX_ACCURACY) return;
+
+    if(!lastGpsPoint || latlng.distanceTo(lastGpsPoint) >= GPS_MIN_DISTANCE){
+      addVertex(latlng);
+      lastGpsPoint = latlng;
+    }
+  }
+
+  function onGpsError(err){
+    stopGpsTracking();
+    if(err && err.code === 1){
+      alert('No se pudo activar el GPS: falta el permiso de ubicación. Revisá los permisos de la página en el navegador.');
+    } else {
+      alert('Se perdió la señal de GPS. Revisá que esté activado y que tengas buena señal.');
+    }
   }
 
   function suggestName(type){
@@ -727,6 +819,7 @@
     btn.addEventListener('click', function(){ startDrawing(btn.dataset.type); });
   });
   document.getElementById('undoBtn').addEventListener('click', undoLastPoint);
+  document.getElementById('gpsToggleBtn').addEventListener('click', toggleGps);
   document.getElementById('cancelDrawBtn').addEventListener('click', cancelDrawing);
   document.getElementById('finishDrawBtn').addEventListener('click', finishDrawing);
 
