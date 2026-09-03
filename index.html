@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Mapa de Parcelas</title>
 <meta name="theme-color" content="#1C2620">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -75,7 +78,7 @@
   #mapWrap{flex:1 1 auto;min-height:0;position:relative;}
   #map{position:absolute;inset:0;background:#0d1310;}
   .leaflet-control-attribution{
-    font-size:9px !important;background:rgba(23,31,26,0.55) !important;color:var(--text-muted) !important;
+    font-size:9px !important;background:var(--bg-dark-t) !important;color:var(--text-muted) !important;
   }
   .leaflet-control-attribution a{color:var(--text-muted) !important;}
   .leaflet-control-zoom{border:none !important;margin-top:10px !important;}
@@ -123,7 +126,7 @@
   body.theme-light #iconSun{display:block;}
   body.theme-light #iconMoon{display:none;}
   .shape-label{
-    background:rgba(23,31,26,0.85) !important;border:1px solid var(--border) !important;
+    background:var(--bg-dark-t) !important;border:1px solid var(--border) !important;
     color:var(--text-light) !important;font-weight:600;font-size:12px;
     padding:2px 7px !important;border-radius:6px !important;box-shadow:none !important;
   }
@@ -204,6 +207,7 @@
   .row-item .area{font-size:12.5px;color:var(--text-muted);}
   .row-item .row-actions{display:flex;gap:4px;}
   .row-actions button{width:34px;height:34px;border-radius:8px;border:none;background:rgba(245,243,238,0.06);color:var(--text-light);display:flex;align-items:center;justify-content:center;}
+  .row-actions button.edit{color:#F2C94C;}
   .row-actions button.del{color:var(--danger);}
   .empty-state{text-align:center;padding:30px 10px;color:var(--text-muted);font-size:14px;line-height:1.5;}
   /* menu popover */
@@ -336,6 +340,7 @@
   var layerById = {};       // id -> leaflet layer
   var map, drawnLayerGroup;
   var mode = null;
+  var editingId = null;     // id of the shape being edited, null when drawing a new one
   var drawPoints = [];      // array of L.LatLng
   var tempMarkers = [];
   var tempPreviewLayer = null;
@@ -435,8 +440,14 @@
   // ---------- drawing flow ----------
   function startDrawing(type){
     mode = type;
+    editingId = null;
     drawPoints = [];
     clearTempLayers();
+    setupDrawingUI(type, TYPE_INFO[type].label);
+    updateDrawUI();
+  }
+
+  function setupDrawingUI(type, title){
     var info = TYPE_INFO[type];
     document.getElementById('toolbarDefault').style.display = 'none';
     var dt = document.getElementById('toolbarDrawing');
@@ -447,13 +458,33 @@
     var toast = document.getElementById('drawToast');
     toast.style.setProperty('--type-color', info.color);
     toast.classList.add('show');
-    document.getElementById('drawToastTitle').textContent = info.label;
+    document.getElementById('drawToastTitle').textContent = title;
     var gpsBtn = document.getElementById('gpsToggleBtn');
     gpsBtn.classList.remove('active');
     gpsBtn.classList.add('show');
     gpsBtn.style.setProperty('--type-color', info.color);
     updateGpsHint();
+  }
+
+  function startEditShape(id){
+    var shape = shapes.filter(function(s){ return s.id === id; })[0];
+    if(!shape) return;
+    closeListModal();
+    var oldLayer = layerById[id];
+    if(oldLayer) drawnLayerGroup.removeLayer(oldLayer);
+    editingId = id;
+    mode = shape.type;
+    drawPoints = [];
+    clearTempLayers();
+    setupDrawingUI(shape.type, 'Editando ' + TYPE_INFO[shape.type].label);
+    shape.points.forEach(function(p){
+      var latlng = L.latLng(p[0], p[1]);
+      drawPoints.push(latlng);
+      createVertexMarker(latlng);
+    });
+    updatePreview();
     updateDrawUI();
+    map.flyToBounds(L.latLngBounds(drawPoints), { padding:[60,60], maxZoom:17 });
   }
 
   function updateGpsHint(){
@@ -500,6 +531,12 @@
 
   function addVertex(latlng){
     drawPoints.push(latlng);
+    createVertexMarker(latlng);
+    updatePreview();
+    updateDrawUI();
+  }
+
+  function createVertexMarker(latlng){
     var marker = L.marker(latlng, { icon: vertexIcon(TYPE_INFO[mode].color), draggable:true, autoPan:true });
     marker.on('drag', function(){
       var idx = tempMarkers.indexOf(marker);
@@ -514,8 +551,7 @@
     });
     marker.addTo(map);
     tempMarkers.push(marker);
-    updatePreview();
-    updateDrawUI();
+    return marker;
   }
 
   function deleteVertex(marker){
@@ -558,6 +594,11 @@
   function cancelDrawing(){
     stopGpsTracking();
     clearTempLayers();
+    if(editingId){
+      var shape = shapes.filter(function(s){ return s.id === editingId; })[0];
+      if(shape) renderShapeOnMap(shape);
+      editingId = null;
+    }
     drawPoints = [];
     mode = null;
     document.getElementById('toolbarDefault').style.display = 'flex';
@@ -631,9 +672,15 @@
     var info = TYPE_INFO[mode];
     if(drawPoints.length < info.minPoints) return;
     pendingArea = info.isPolygon ? computeAreaHa(drawPoints) : null;
-    document.getElementById('nameModalTitle').textContent = 'Nueva ' + info.label;
     var input = document.getElementById('nameInput');
-    input.value = suggestName(mode);
+    if(editingId){
+      var existing = shapes.filter(function(s){ return s.id === editingId; })[0];
+      document.getElementById('nameModalTitle').textContent = 'Editar ' + info.label;
+      input.value = existing ? existing.name : suggestName(mode);
+    } else {
+      document.getElementById('nameModalTitle').textContent = 'Nueva ' + info.label;
+      input.value = suggestName(mode);
+    }
     var areaLine = document.getElementById('areaLine');
     if(pendingArea !== null){
       areaLine.style.display = 'flex';
@@ -648,16 +695,28 @@
 
   function confirmSaveShape(){
     var name = document.getElementById('nameInput').value.trim() || suggestName(mode);
-    var shape = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-      type: mode,
-      name: name,
-      points: drawPoints.map(function(ll){ return [ll.lat, ll.lng]; }),
-      areaHa: pendingArea
-    };
-    shapes.push(shape);
+    var points = drawPoints.map(function(ll){ return [ll.lat, ll.lng]; });
+    if(editingId){
+      var idx = shapes.findIndex(function(s){ return s.id === editingId; });
+      if(idx !== -1){
+        shapes[idx].name = name;
+        shapes[idx].points = points;
+        shapes[idx].areaHa = pendingArea;
+        renderShapeOnMap(shapes[idx]);
+      }
+      editingId = null;
+    } else {
+      var shape = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        type: mode,
+        name: name,
+        points: points,
+        areaHa: pendingArea
+      };
+      shapes.push(shape);
+      renderShapeOnMap(shape);
+    }
     saveShapes();
-    renderShapeOnMap(shape);
     updateListBadge();
     document.getElementById('nameBackdrop').classList.remove('show');
     cancelDrawing();
@@ -726,10 +785,12 @@
       '<div class="info"><div class="name"></div><div class="area">'+(s.areaHa!=null ? fmtHa(s.areaHa) : '—')+'</div></div>' +
       '<div class="row-actions">' +
         '<button class="go" aria-label="Ir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22"/></svg></button>' +
+        '<button class="edit" aria-label="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>' +
         '<button class="del" aria-label="Borrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7H20M9 7V4H15V7M6 7L7 20H17L18 7"/></svg></button>' +
       '</div>';
     row.querySelector('.name').textContent = s.name;
     row.querySelector('.go').addEventListener('click', function(){ flyToShape(s.id); closeListModal(); });
+    row.querySelector('.edit').addEventListener('click', function(){ startEditShape(s.id); });
     row.querySelector('.del').addEventListener('click', function(){ deleteShape(s.id); });
     return row;
   }
