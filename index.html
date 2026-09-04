@@ -45,7 +45,7 @@
   html,body{height:100%;margin:0;overscroll-behavior:none;}
   body.theme-light #map{background:#cfd9d0;}
   body{
-    display:flex;flex-direction:column;height:100vh;height:100dvh;
+    display:flex;flex-direction:column;height:100vh;height:100dvh;height:calc(var(--app-height, 100vh));
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     background:var(--bg-dark);color:var(--text-light);
     overflow:hidden;
@@ -965,7 +965,16 @@
   });
   document.getElementById('themeBtn').addEventListener('click', toggleTheme);
 
+  // ---------- viewport height fix (iOS Safari) ----------
+  function setAppHeight(){
+    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+    if(typeof map !== 'undefined' && map) map.invalidateSize();
+  }
+  window.addEventListener('resize', setAppHeight);
+  window.addEventListener('orientationchange', function(){ setTimeout(setAppHeight, 200); });
+
   // ---------- init ----------
+  setAppHeight();
   var savedTheme = 'dark';
   try{ savedTheme = localStorage.getItem('mapaParcelas_theme') || 'dark'; }catch(e){}
   applyTheme(savedTheme);
@@ -976,6 +985,7 @@
   });
   shapes = loadShapes();
   redrawAll();
+  setTimeout(setAppHeight, 300);
 
 })();
 </script>
