@@ -172,7 +172,7 @@
   .draw-btn.primary[disabled]{opacity:0.35;}
   /* ---------- Modal ---------- */
   .backdrop{
-    position:fixed;inset:0;background:rgba(10,14,11,0.6);z-index:900;
+    position:fixed;inset:0;background:rgba(10,14,11,0.6);z-index:1100;
     display:none;align-items:flex-end;justify-content:center;
   }
   .backdrop.show{display:flex;}
@@ -220,7 +220,7 @@
   .empty-state{text-align:center;padding:30px 10px;color:var(--text-muted);font-size:14px;line-height:1.5;}
   /* menu popover */
   .menu-pop{
-    position:absolute;top:calc(env(safe-area-inset-top,0px) + 52px);right:14px;z-index:600;
+    position:absolute;top:calc(env(safe-area-inset-top,0px) + 52px);right:14px;z-index:1050;
     background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
     min-width:170px;display:none;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.4);
   }
@@ -951,7 +951,10 @@
   });
   document.getElementById('exportBtn').addEventListener('click', exportData);
   document.getElementById('ndviBtn').addEventListener('click', function(){
-    window.open('https://browser.dataspace.copernicus.eu/', '_blank');
+    var c = map.getCenter();
+    var z = Math.min(map.getZoom(), 16);
+    var url = 'https://browser.dataspace.copernicus.eu/?zoom=' + z + '&lat=' + c.lat.toFixed(5) + '&lng=' + c.lng.toFixed(5);
+    window.open(url, '_blank');
     closeMenu();
   });
   document.getElementById('clearAllBtn').addEventListener('click', clearAllData);
