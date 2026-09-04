@@ -332,6 +332,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
       </button>
     </h2>
+    <input type="search" class="text-input" id="searchInput" placeholder="Buscar por nombre..." style="margin-bottom:10px;">
     <div class="summary-line" id="summaryLine">Todavía no hay nada marcado.</div>
     <div class="list-scroll" id="listScroll"></div>
   </div>
@@ -756,6 +757,7 @@
   }
 
   function openListModal(){
+    document.getElementById('searchInput').value = '';
     renderListContent();
     document.getElementById('listBackdrop').classList.add('show');
   }
@@ -766,6 +768,8 @@
   function renderListContent(){
     var scroll = document.getElementById('listScroll');
     var summary = document.getElementById('summaryLine');
+    var rawQuery = document.getElementById('searchInput').value.trim();
+    var query = rawQuery.toLowerCase();
     scroll.innerHTML = '';
 
     if(!shapes.length){
@@ -774,19 +778,30 @@
       return;
     }
 
-    var counts = { campo:0, parcela:0, linea:0 };
-    var parcelaHaTotal = 0;
-    shapes.forEach(function(s){
-      counts[s.type]++;
-      if(s.type==='parcela' && s.areaHa) parcelaHaTotal += s.areaHa;
-    });
-    summary.textContent = counts.campo + ' campo' + (counts.campo!==1?'s':'') +
-      ' · ' + counts.parcela + ' parcela' + (counts.parcela!==1?'s':'') +
-      (counts.parcela ? ' (' + fmtHa(parcelaHaTotal) + ')' : '') +
-      ' · ' + counts.linea + ' línea' + (counts.linea!==1?'s':'');
+    var visible = query ? shapes.filter(function(s){ return s.name.toLowerCase().indexOf(query) !== -1; }) : shapes;
+
+    if(query){
+      summary.textContent = visible.length + ' resultado' + (visible.length!==1?'s':'') + ' para "' + rawQuery + '"';
+    } else {
+      var counts = { campo:0, parcela:0, linea:0 };
+      var parcelaHaTotal = 0;
+      shapes.forEach(function(s){
+        counts[s.type]++;
+        if(s.type==='parcela' && s.areaHa) parcelaHaTotal += s.areaHa;
+      });
+      summary.textContent = counts.campo + ' campo' + (counts.campo!==1?'s':'') +
+        ' · ' + counts.parcela + ' parcela' + (counts.parcela!==1?'s':'') +
+        (counts.parcela ? ' (' + fmtHa(parcelaHaTotal) + ')' : '') +
+        ' · ' + counts.linea + ' línea' + (counts.linea!==1?'s':'');
+    }
+
+    if(query && !visible.length){
+      scroll.innerHTML = '<div class="empty-state">No se encontró ningún elemento con ese nombre.</div>';
+      return;
+    }
 
     ['campo','parcela','linea'].forEach(function(type){
-      var group = shapes.filter(function(s){ return s.type===type; });
+      var group = visible.filter(function(s){ return s.type===type; });
       if(!group.length) return;
       var titleEl = document.createElement('div');
       titleEl.className = 'group-title';
@@ -919,6 +934,7 @@
 
   document.getElementById('listBtn').addEventListener('click', openListModal);
   document.getElementById('listCloseBtn').addEventListener('click', closeListModal);
+  document.getElementById('searchInput').addEventListener('input', renderListContent);
   document.getElementById('listBackdrop').addEventListener('click', function(e){
     if(e.target === this) closeListModal();
   });
