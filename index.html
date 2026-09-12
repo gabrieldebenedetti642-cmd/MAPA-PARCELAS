@@ -203,6 +203,13 @@
     background:rgba(245,243,238,0.05);color:var(--text-light);font-size:13.5px;font-weight:600;
   }
   .status-btn.selected{background:var(--type-color,var(--parcela));color:#17211c;border-color:transparent;}
+  .color-picker{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px;}
+  .color-swatch{
+    width:32px;height:32px;border-radius:50%;border:2px solid transparent;padding:0;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,0.15);
+  }
+  .color-swatch.selected{border-color:var(--text-light);}
+  .auto-swatch{background:conic-gradient(#4A90D9,#E8871E,#E23D3D,#4CAF50,#9C27B0,#00BCD4,#E91E8C,#FFC107,#4A90D9);}
   .btn{flex:1;height:46px;border-radius:var(--radius-sm);border:1px solid var(--border);background:rgba(245,243,238,0.05);color:var(--text-light);font-size:14.5px;font-weight:600;}
   .btn.primary{background:var(--type-color,var(--parcela));color:#17211c;border-color:transparent;}
   .btn.danger{background:var(--danger);color:#2a0d0d;border-color:transparent;}
@@ -344,6 +351,18 @@
         <button type="button" class="status-btn" id="statusDescansandoBtn" data-status="descansando">🌱 Descansando</button>
       </div>
     </div>
+    <span class="field-label">Color del contorno</span>
+    <div class="color-picker" id="colorPicker">
+      <button type="button" class="color-swatch auto-swatch" data-color="" title="Automático"></button>
+      <button type="button" class="color-swatch" data-color="#4A90D9" style="background:#4A90D9;"></button>
+      <button type="button" class="color-swatch" data-color="#E8871E" style="background:#E8871E;"></button>
+      <button type="button" class="color-swatch" data-color="#E23D3D" style="background:#E23D3D;"></button>
+      <button type="button" class="color-swatch" data-color="#4CAF50" style="background:#4CAF50;"></button>
+      <button type="button" class="color-swatch" data-color="#9C27B0" style="background:#9C27B0;"></button>
+      <button type="button" class="color-swatch" data-color="#00BCD4" style="background:#00BCD4;"></button>
+      <button type="button" class="color-swatch" data-color="#E91E8C" style="background:#E91E8C;"></button>
+      <button type="button" class="color-swatch" data-color="#FFC107" style="background:#FFC107;"></button>
+    </div>
     <span class="field-label">Notas (opcional)</span>
     <textarea class="text-input" id="notesInput" rows="2" maxlength="300" style="resize:none;margin-bottom:14px;"></textarea>
     <div class="btn-row">
@@ -365,6 +384,22 @@
     <input type="search" class="text-input" id="searchInput" placeholder="Buscar por nombre..." style="margin-bottom:10px;">
     <div class="summary-line" id="summaryLine">Todavía no hay nada marcado.</div>
     <div class="list-scroll" id="listScroll"></div>
+  </div>
+</div>
+
+<div class="backdrop" id="kmlBackdrop">
+  <div class="sheet" style="height:70vh;">
+    <div class="sheet-handle"></div>
+    <h2>Exportar a KML
+      <button class="close-x" id="kmlCloseBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
+      </button>
+    </h2>
+    <div class="btn-row" style="margin-bottom:12px;">
+      <button class="btn" id="kmlSelectAllBtn">Seleccionar todos</button>
+      <button class="btn primary" id="kmlExportBtn">Exportar</button>
+    </div>
+    <div class="list-scroll" id="kmlListScroll"></div>
   </div>
 </div>
 
@@ -395,6 +430,7 @@
   var tempMarkers = [];
   var tempPreviewLayer = null;
   var pendingArea = null;
+  var pendingColor = null;
   var pendingStatus = null;
   var originalStatus = null;
   var lastDeleted = null;
@@ -443,7 +479,7 @@
 
   // ---------- map setup ----------
   function initMap(){
-    map = L.map('map', { attributionControl:false, zoomControl:false, rotate:true, touchRotate:true, rotateControl:false });
+    map = L.map('map', { attributionControl:false, zoomControl:false, rotate:true, touchRotate:true, rotateControl:false, zoomAnimation:false, markerZoomAnimation:false });
     L.control.zoom({position:'topright'}).addTo(map);
     L.control.attribution({position:'bottomleft', prefix:false})
       .addAttribution('Imágenes © Esri, Maxar, Earthstar Geographics')
@@ -479,12 +515,13 @@
 
   function renderShapeOnMap(shape){
     var info = TYPE_INFO[shape.type];
+    var color = shape.color || info.color;
     var latlngs = shape.points.map(function(p){ return L.latLng(p[0], p[1]); });
     var layer;
     if(info.isPolygon){
-      layer = L.polygon(latlngs, { color: info.color, weight:2, fillColor: info.color, fillOpacity:0.18 });
+      layer = L.polygon(latlngs, { color: color, weight:2, fillColor: color, fillOpacity:0.18 });
     } else {
-      layer = L.polyline(latlngs, { color: info.color, weight:4 });
+      layer = L.polyline(latlngs, { color: color, weight:4 });
     }
     layer.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     layer.addTo(drawnLayerGroup);
@@ -750,6 +787,8 @@
       input.value = suggestName(mode);
     }
     document.getElementById('notesInput').value = existing && existing.notes ? existing.notes : '';
+    pendingColor = existing && existing.color ? existing.color : null;
+    updateColorPickerUI();
     pendingStatus = existing && existing.status ? existing.status : null;
     originalStatus = pendingStatus;
     var statusField = document.getElementById('statusField');
@@ -785,6 +824,18 @@
     updateStatusButtonsUI(TYPE_INFO[mode].color);
   }
 
+  function updateColorPickerUI(){
+    document.querySelectorAll('.color-swatch').forEach(function(btn){
+      var val = btn.dataset.color || null;
+      btn.classList.toggle('selected', val === pendingColor);
+    });
+  }
+
+  function selectColor(color){
+    pendingColor = color || null;
+    updateColorPickerUI();
+  }
+
   function confirmSaveShape(){
     var name = document.getElementById('nameInput').value.trim() || suggestName(mode);
     var notes = document.getElementById('notesInput').value.trim();
@@ -804,6 +855,7 @@
         shapes[idx].notes = notes;
         shapes[idx].status = pendingStatus;
         shapes[idx].statusDate = statusDate;
+        shapes[idx].color = pendingColor;
         renderShapeOnMap(shapes[idx]);
       }
       editingId = null;
@@ -816,7 +868,8 @@
         areaHa: pendingArea,
         notes: notes,
         status: pendingStatus,
-        statusDate: statusDate
+        statusDate: statusDate,
+        color: pendingColor
       };
       shapes.push(shape);
       renderShapeOnMap(shape);
@@ -907,7 +960,7 @@
       statusText = ' · ' + statusEmoji(s.status) + label + dateText;
     }
     row.innerHTML =
-      '<div class="dot" style="background:'+info.color+'"></div>' +
+      '<div class="dot" style="background:'+(s.color || info.color)+'"></div>' +
       '<div class="info"><div class="name"></div><div class="area">'+areaText+statusText+'</div>' +
         (s.notes ? '<div class="notes"></div>' : '') +
       '</div>' +
@@ -1017,17 +1070,72 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  function exportKML(){
-    if(!shapes.length){ alert('Todavía no hay nada para exportar.'); return; }
-    var kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n<name>Mapa de Parcelas</name>\n';
+  var kmlSelected = {};
+
+  function openKmlModal(){
+    if(!shapes.length){ alert('Todavía no hay nada para exportar.'); closeMenu(); return; }
+    kmlSelected = {};
+    renderKmlList();
+    document.getElementById('kmlBackdrop').classList.add('show');
+    closeMenu();
+  }
+
+  function closeKmlModal(){
+    document.getElementById('kmlBackdrop').classList.remove('show');
+  }
+
+  function renderKmlList(){
+    var scroll = document.getElementById('kmlListScroll');
+    scroll.innerHTML = '';
     ['campo','parcela','linea'].forEach(function(type){
-      var info = TYPE_INFO[type];
-      var lineColor = toKmlColor(info.color);
-      kml += '<Style id="style_'+type+'"><LineStyle><color>'+lineColor+'</color><width>3</width></LineStyle>';
+      var group = shapes.filter(function(s){ return s.type===type; });
+      if(!group.length) return;
+      var titleEl = document.createElement('div');
+      titleEl.className = 'group-title';
+      titleEl.textContent = TYPE_INFO[type].label + 's';
+      scroll.appendChild(titleEl);
+      group.forEach(function(s){
+        var row = document.createElement('label');
+        row.className = 'row-item';
+        row.style.cursor = 'pointer';
+        row.innerHTML =
+          '<input type="checkbox" class="kml-check" style="width:20px;height:20px;flex-shrink:0;accent-color:'+TYPE_INFO[s.type].color+';">' +
+          '<div class="info"><div class="name"></div><div class="area">'+(s.areaHa!=null?fmtHa(s.areaHa):'—')+'</div></div>';
+        row.querySelector('.name').textContent = s.name;
+        var check = row.querySelector('.kml-check');
+        check.checked = !!kmlSelected[s.id];
+        check.addEventListener('change', function(){
+          kmlSelected[s.id] = check.checked;
+        });
+        scroll.appendChild(row);
+      });
+    });
+  }
+
+  function toggleKmlSelectAll(){
+    var allSelected = shapes.every(function(s){ return kmlSelected[s.id]; });
+    shapes.forEach(function(s){ kmlSelected[s.id] = !allSelected; });
+    renderKmlList();
+  }
+
+  function doExportKml(){
+    var selected = shapes.filter(function(s){ return kmlSelected[s.id]; });
+    if(!selected.length){ alert('Elegí al menos un elemento, o tocá "Seleccionar todos".'); return; }
+    exportKML(selected);
+    closeKmlModal();
+  }
+
+  function exportKML(list){
+    if(!list.length){ alert('Todavía no hay nada para exportar.'); return; }
+    var kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n<name>Mapa de Parcelas</name>\n';
+    list.forEach(function(s){
+      var info = TYPE_INFO[s.type];
+      var lineColor = toKmlColor(s.color || info.color);
+      kml += '<Style id="style_'+s.id+'"><LineStyle><color>'+lineColor+'</color><width>3</width></LineStyle>';
       if(info.isPolygon) kml += '<PolyStyle><color>4d'+lineColor.substring(2)+'</color></PolyStyle>';
       kml += '</Style>\n';
     });
-    shapes.forEach(function(s){
+    list.forEach(function(s){
       var info = TYPE_INFO[s.type];
       var coords = s.points.map(function(p){ return p[1]+','+p[0]+',0'; });
       if(info.isPolygon) coords.push(coords[0]);
@@ -1037,7 +1145,7 @@
       if(s.notes) desc.push('Notas: ' + s.notes);
       kml += '<Placemark><name>'+kmlEscape(s.name)+'</name>';
       if(desc.length) kml += '<description>'+kmlEscape(desc.join(' | '))+'</description>';
-      kml += '<styleUrl>#style_'+s.type+'</styleUrl>';
+      kml += '<styleUrl>#style_'+s.id+'</styleUrl>';
       kml += info.isPolygon ?
         '<Polygon><outerBoundaryIs><LinearRing><coordinates>'+coords.join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon>' :
         '<LineString><coordinates>'+coords.join(' ')+'</coordinates></LineString>';
@@ -1047,9 +1155,8 @@
     var blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'mapa-parcelas.kml';
+    a.download = (list.length === 1 ? list[0].name.replace(/[^a-z0-9áéíóúñ_\- ]/gi,'') : 'mapa-parcelas') + '.kml';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    closeMenu();
   }
 
   function triggerRestore(){
@@ -1133,6 +1240,9 @@
   document.getElementById('nameSaveBtn').addEventListener('click', confirmSaveShape);
   document.getElementById('statusOcupadoBtn').addEventListener('click', function(){ toggleStatus('ocupado'); });
   document.getElementById('statusDescansandoBtn').addEventListener('click', function(){ toggleStatus('descansando'); });
+  document.querySelectorAll('.color-swatch').forEach(function(btn){
+    btn.addEventListener('click', function(){ selectColor(btn.dataset.color); });
+  });
   document.getElementById('undoDeleteBtn').addEventListener('click', undoDelete);
   document.getElementById('nameInput').addEventListener('keydown', function(e){
     if(e.key === 'Enter') confirmSaveShape();
@@ -1159,7 +1269,10 @@
   document.getElementById('backupBtn').addEventListener('click', exportBackup);
   document.getElementById('restoreBtn').addEventListener('click', triggerRestore);
   document.getElementById('importFileInput').addEventListener('change', handleRestoreFile);
-  document.getElementById('kmlBtn').addEventListener('click', exportKML);
+  document.getElementById('kmlBtn').addEventListener('click', openKmlModal);
+  document.getElementById('kmlCloseBtn').addEventListener('click', closeKmlModal);
+  document.getElementById('kmlSelectAllBtn').addEventListener('click', toggleKmlSelectAll);
+  document.getElementById('kmlExportBtn').addEventListener('click', doExportKml);
   document.getElementById('ndviBtn').addEventListener('click', function(){
     var c = map.getCenter();
     var z = Math.min(map.getZoom(), 16);
