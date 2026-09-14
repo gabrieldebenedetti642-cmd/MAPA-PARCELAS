@@ -480,6 +480,7 @@
     try{
       fbApp = firebase.initializeApp(firebaseConfig);
       fbDb = firebase.firestore();
+      fbDb.settings({ experimentalAutoDetectLongPolling: true, merge: true });
       return true;
     }catch(e){ console.error('Firebase init error', e); return false; }
   }
