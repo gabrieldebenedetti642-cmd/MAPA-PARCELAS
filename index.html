@@ -429,8 +429,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
 (function(){
   "use strict";
@@ -465,27 +463,38 @@
   var GPS_MAX_ACCURACY = 25;  // ignore GPS readings worse than this many meters
 
   // ---------- multi-device sync (opt-in, off by default) ----------
-  var firebaseConfig = {
-    apiKey: "AIzaSyC8cyDsoeJk_BLo7Df9B9pJa1KKulj0x8s",
-    authDomain: "mapa-parcelas.firebaseapp.com",
-    projectId: "mapa-parcelas",
-    storageBucket: "mapa-parcelas.firebasestorage.app",
-    messagingSenderId: "789936144104",
-    appId: "1:789936144104:web:c49f3c3123b1b1e21b935d"
-  };
-  var fbApp = null, fbDb = null, syncUnsub = null;
+  var FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/mapa-parcelas/databases/(default)/documents/mapaParcelasSync/';
+  var FIRESTORE_KEY = 'AIzaSyC8cyDsoeJk_BLo7Df9B9pJa1KKulj0x8s';
+  var SYNC_POLL_MS = 30000;
   var syncCode = null;
-  var applyingRemote = false;
+  var syncPollInterval = null;
+  var lastSyncedJson = null;
 
-  function initFirebase(){
-    if(fbDb) return true;
-    if(typeof firebase === 'undefined') return false;
-    try{
-      fbApp = firebase.initializeApp(firebaseConfig);
-      fbDb = firebase.firestore();
-      fbDb.settings({ experimentalForceLongPolling: true, merge: true });
-      return true;
-    }catch(e){ console.error('Firebase init error', e); return false; }
+  function syncDocUrl(code){
+    return FIRESTORE_BASE + encodeURIComponent(code) + '?key=' + FIRESTORE_KEY;
+  }
+
+  function fetchCloudShapes(code){
+    return fetch(syncDocUrl(code)).then(function(res){
+      if(res.status === 404) return null;
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function(data){
+      if(!data || !data.fields || !data.fields.shapesJson) return null;
+      try{ return JSON.parse(data.fields.shapesJson.stringValue); }catch(e){ return null; }
+    });
+  }
+
+  function pushCloudShapes(code, shapesArr){
+    var body = { fields: { shapesJson: { stringValue: JSON.stringify(shapesArr) } } };
+    return fetch(syncDocUrl(code), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(res){
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    });
   }
 
   function loadSyncCode(){
@@ -498,30 +507,36 @@
     }catch(e){}
   }
 
-  function startSyncListener(code){
-    if(!initFirebase()) return;
-    if(syncUnsub) syncUnsub();
-    syncUnsub = fbDb.collection('mapaParcelasSync').doc(code).onSnapshot(function(doc){
-      if(doc.metadata.hasPendingWrites) return;
-      if(!doc.exists) return;
-      var data = doc.data();
-      if(!data || !Array.isArray(data.shapes)) return;
-      applyingRemote = true;
-      shapes = data.shapes;
-      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
-      redrawAll();
-      updateListBadge();
-      if(document.getElementById('listBackdrop').classList.contains('show')) renderListContent();
-      applyingRemote = false;
-    }, function(err){ console.error('Sync listener error', err); });
+  function pollCloud(code){
+    fetchCloudShapes(code).then(function(cloudShapes){
+      if(!cloudShapes) return;
+      var json = JSON.stringify(cloudShapes);
+      if(json === lastSyncedJson) return;
+      lastSyncedJson = json;
+      if(json !== JSON.stringify(shapes)){
+        shapes = cloudShapes;
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
+        redrawAll();
+        updateListBadge();
+        if(document.getElementById('listBackdrop').classList.contains('show')) renderListContent();
+      }
+    }).catch(function(e){ console.error('Poll error', e); });
+  }
+
+  function startSyncPolling(code){
+    if(syncPollInterval) clearInterval(syncPollInterval);
+    syncPollInterval = setInterval(function(){ pollCloud(code); }, SYNC_POLL_MS);
+    pollCloud(code);
+  }
+
+  function stopSyncPolling(){
+    if(syncPollInterval){ clearInterval(syncPollInterval); syncPollInterval = null; }
   }
 
   function pushToCloud(){
-    if(!syncCode || applyingRemote || !initFirebase()) return;
-    fbDb.collection('mapaParcelasSync').doc(syncCode).set({
-      shapes: shapes,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function(e){ console.error('Sync push error', e); });
+    if(!syncCode) return;
+    lastSyncedJson = JSON.stringify(shapes);
+    pushCloudShapes(syncCode, shapes).catch(function(e){ console.error('Sync push error', e); });
   }
 
   // ---------- persistence ----------
@@ -1315,22 +1330,22 @@
     var raw = document.getElementById('syncCodeInput').value.trim();
     if(!raw){ alert('Escribí un código (podés inventar uno, por ejemplo tu apellido y un número).'); return; }
     var code = raw.toLowerCase().replace(/\s+/g,'');
-    if(!initFirebase()){ alert('No se pudo conectar. Revisá tu conexión a internet e intentá de nuevo.'); return; }
     var btn = document.getElementById('syncActivateBtn');
     btn.disabled = true;
     btn.textContent = 'Conectando...';
-    withTimeout(fbDb.collection('mapaParcelasSync').doc(code).get(), 8000).then(function(doc){
-      if(doc.exists && doc.data() && Array.isArray(doc.data().shapes) && doc.data().shapes.length){
-        var n = doc.data().shapes.length;
-        if(!confirm('Ya hay ' + n + ' elemento(s) guardados con ese código. ¿Reemplazar lo que tenés en ESTE aparato por esos datos?')) return;
-        shapes = doc.data().shapes;
+    withTimeout(fetchCloudShapes(code), 8000).then(function(cloudShapes){
+      if(cloudShapes && cloudShapes.length){
+        if(!confirm('Ya hay ' + cloudShapes.length + ' elemento(s) guardados con ese código. ¿Reemplazar lo que tenés en ESTE aparato por esos datos?')){
+          return;
+        }
+        shapes = cloudShapes;
         redrawAll();
         updateListBadge();
       }
       syncCode = code;
       saveSyncCode(code);
       saveShapes();
-      startSyncListener(code);
+      startSyncPolling(code);
       updateSyncStatusText();
       updateSyncMenuLabel();
       alert('Sincronización activada con el código "' + code + '". Usá el mismo código en tu otro aparato.');
@@ -1349,7 +1364,7 @@
     if(!confirm('¿Dejar de sincronizar este aparato? Va a seguir funcionando normal, solo que no va a compartir más datos con tu otro aparato.')) return;
     syncCode = null;
     saveSyncCode(null);
-    if(syncUnsub){ syncUnsub(); syncUnsub = null; }
+    stopSyncPolling();
     updateSyncStatusText();
     updateSyncMenuLabel();
   }
@@ -1470,7 +1485,7 @@
   redrawAll();
   updateSyncMenuLabel();
   syncCode = loadSyncCode();
-  if(syncCode) startSyncListener(syncCode);
+  if(syncCode) startSyncPolling(syncCode);
   setTimeout(setAppHeight, 300);
 
 })();
