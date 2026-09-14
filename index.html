@@ -454,6 +454,7 @@
 
   var shapes = [];          // saved shapes {id,type,name,points,areaHa}
   var layerById = {};       // id -> leaflet layer
+  var labelMarkerById = {}; // id -> leaflet marker holding the name label
   var map, drawnLayerGroup;
   var mode = null;
   var editingId = null;     // id of the shape being edited, null when drawing a new one
@@ -634,6 +635,92 @@
 
   var LABEL_MIN_ZOOM = 15;
 
+  function polygonCentroid(points){
+    var x=0,y=0,area=0,n=points.length;
+    for(var i=0;i<n;i++){
+      var j=(i+1)%n;
+      var xi=points[i][1], yi=points[i][0];
+      var xj=points[j][1], yj=points[j][0];
+      var cross = xi*yj - xj*yi;
+      area += cross;
+      x += (xi+xj)*cross;
+      y += (yi+yj)*cross;
+    }
+    area *= 0.5;
+    if(Math.abs(area) < 1e-12){
+      var sx=0, sy=0;
+      points.forEach(function(p){ sx+=p[1]; sy+=p[0]; });
+      return [sy/n, sx/n];
+    }
+    return [y/(6*area), x/(6*area)];
+  }
+
+  function findLabelPosition(points){
+    if(points.length < 3) return L.latLng(points[0][0], points[0][1]);
+    var refLat = points.reduce(function(s,p){return s+p[0];},0) / points.length;
+    var R = 6378137;
+    function toXY(p){
+      return {
+        x: R * (p[1] * Math.PI/180) * Math.cos(refLat * Math.PI/180),
+        y: R * (p[0] * Math.PI/180)
+      };
+    }
+    var proj = points.map(toXY);
+
+    function pointInPolyXY(x,y){
+      var inside=false;
+      for(var i=0,j=proj.length-1;i<proj.length;j=i++){
+        var xi=proj[i].x, yi=proj[i].y, xj=proj[j].x, yj=proj[j].y;
+        var intersect = ((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi);
+        if(intersect) inside = !inside;
+      }
+      return inside;
+    }
+    function distPointToSegXY(px,py,ax,ay,bx,by){
+      var dx=bx-ax, dy=by-ay;
+      var lenSq = dx*dx+dy*dy;
+      var t = lenSq ? ((px-ax)*dx+(py-ay)*dy)/lenSq : 0;
+      t = Math.max(0,Math.min(1,t));
+      var cx=ax+t*dx, cy=ay+t*dy;
+      var ddx=px-cx, ddy=py-cy;
+      return Math.sqrt(ddx*ddx+ddy*ddy);
+    }
+    function distToBoundary(x,y){
+      var minD = Infinity;
+      for(var i=0;i<proj.length;i++){
+        var j=(i+1)%proj.length;
+        var d = distPointToSegXY(x,y, proj[i].x,proj[i].y, proj[j].x,proj[j].y);
+        if(d<minD) minD=d;
+      }
+      return minD;
+    }
+
+    var minX=proj[0].x,maxX=proj[0].x,minY=proj[0].y,maxY=proj[0].y;
+    proj.forEach(function(p){
+      if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
+      if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y;
+    });
+
+    var best=null, bestDist=-1, STEPS=24;
+    for(var i=0;i<=STEPS;i++){
+      for(var j=0;j<=STEPS;j++){
+        var x = minX + (maxX-minX)*i/STEPS;
+        var y = minY + (maxY-minY)*j/STEPS;
+        if(pointInPolyXY(x,y)){
+          var d = distToBoundary(x,y);
+          if(d>bestDist){ bestDist=d; best={x:x,y:y}; }
+        }
+      }
+    }
+    if(!best){
+      var c = polygonCentroid(points);
+      return L.latLng(c[0], c[1]);
+    }
+    var lat = best.y / R * 180/Math.PI;
+    var lng = best.x / (R*Math.cos(refLat*Math.PI/180)) * 180/Math.PI;
+    return L.latLng(lat, lng);
+  }
+
   function renderShapeOnMap(shape){
     var info = TYPE_INFO[shape.type];
     var color = shape.color || info.color;
@@ -644,18 +731,23 @@
     } else {
       layer = L.polyline(latlngs, { color: color, weight:4 });
     }
-    layer.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     layer.addTo(drawnLayerGroup);
     layerById[shape.id] = layer;
-    var tooltipEl = layer.getTooltip() && layer.getTooltip().getElement();
+
+    var labelLatLng = info.isPolygon ? findLabelPosition(shape.points) : latlngs[Math.floor(latlngs.length/2)];
+    var labelMarker = L.marker(labelLatLng, { icon: L.divIcon({className:'', html:'', iconSize:[0,0]}), interactive:false });
+    labelMarker.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
+    labelMarker.addTo(drawnLayerGroup);
+    labelMarkerById[shape.id] = labelMarker;
+    var tooltipEl = labelMarker.getTooltip() && labelMarker.getTooltip().getElement();
     if(tooltipEl) tooltipEl.style.display = (map.getZoom() >= LABEL_MIN_ZOOM) ? '' : 'none';
   }
 
   function updateLabelVisibility(){
     var show = map.getZoom() >= LABEL_MIN_ZOOM;
-    Object.keys(layerById).forEach(function(id){
-      var layer = layerById[id];
-      var tooltip = layer.getTooltip && layer.getTooltip();
+    Object.keys(labelMarkerById).forEach(function(id){
+      var marker = labelMarkerById[id];
+      var tooltip = marker.getTooltip && marker.getTooltip();
       var el = tooltip && tooltip.getElement();
       if(el) el.style.display = show ? '' : 'none';
     });
@@ -739,6 +831,7 @@
   function redrawAll(){
     drawnLayerGroup.clearLayers();
     layerById = {};
+    labelMarkerById = {};
     shapes.forEach(renderShapeOnMap);
     updateListBadge();
   }
@@ -780,6 +873,8 @@
     closeListModal();
     var oldLayer = layerById[id];
     if(oldLayer) drawnLayerGroup.removeLayer(oldLayer);
+    var oldLabel = labelMarkerById[id];
+    if(oldLabel) drawnLayerGroup.removeLayer(oldLabel);
     editingId = id;
     mode = shape.type;
     drawPoints = [];
@@ -1221,6 +1316,9 @@
     var layer = layerById[id];
     if(layer) drawnLayerGroup.removeLayer(layer);
     delete layerById[id];
+    var label = labelMarkerById[id];
+    if(label) drawnLayerGroup.removeLayer(label);
+    delete labelMarkerById[id];
     shapes.splice(idx, 1);
     saveShapes();
     updateListBadge();
