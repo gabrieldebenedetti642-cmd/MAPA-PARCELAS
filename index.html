@@ -651,16 +651,10 @@
   }
 
   function attachLongPress(layer, shapeId){
-    var timer = null;
-    layer.on('mousedown', function(e){
+    layer.on('click', function(e){
       if(mode) return; // don't interfere while actively drawing something else
-      timer = setTimeout(function(){
-        timer = null;
-        showShapeInfoPopup(shapeId, e.latlng);
-      }, 550);
-    });
-    layer.on('mouseup dragstart', function(){
-      if(timer){ clearTimeout(timer); timer = null; }
+      L.DomEvent.stopPropagation(e);
+      showShapeInfoPopup(shapeId, e.latlng);
     });
   }
 
