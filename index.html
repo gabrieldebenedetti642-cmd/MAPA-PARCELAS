@@ -612,6 +612,7 @@
     map.setView([-34.6, -63.5], 6);
 
     map.on('click', onMapClick);
+    map.on('zoomend', updateLabelVisibility);
 
     // try silent initial geolocation
     if(navigator.geolocation){
@@ -631,6 +632,8 @@
     return '';
   }
 
+  var LABEL_MIN_ZOOM = 15;
+
   function renderShapeOnMap(shape){
     var info = TYPE_INFO[shape.type];
     var color = shape.color || info.color;
@@ -644,6 +647,18 @@
     layer.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     layer.addTo(drawnLayerGroup);
     layerById[shape.id] = layer;
+    var tooltipEl = layer.getTooltip() && layer.getTooltip().getElement();
+    if(tooltipEl) tooltipEl.style.display = (map.getZoom() >= LABEL_MIN_ZOOM) ? '' : 'none';
+  }
+
+  function updateLabelVisibility(){
+    var show = map.getZoom() >= LABEL_MIN_ZOOM;
+    Object.keys(layerById).forEach(function(id){
+      var layer = layerById[id];
+      var tooltip = layer.getTooltip && layer.getTooltip();
+      var el = tooltip && tooltip.getElement();
+      if(el) el.style.display = show ? '' : 'none';
+    });
   }
 
   function escapeHtml(s){
