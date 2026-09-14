@@ -479,7 +479,7 @@
 
   // ---------- map setup ----------
   function initMap(){
-    map = L.map('map', { attributionControl:false, zoomControl:false, rotate:true, touchRotate:true, rotateControl:false, zoomAnimation:false, markerZoomAnimation:false });
+    map = L.map('map', { attributionControl:false, zoomControl:false, rotate:true, touchRotate:true, rotateControl:false, zoomAnimation:false, markerZoomAnimation:false, preferCanvas:true });
     L.control.zoom({position:'topright'}).addTo(map);
     L.control.attribution({position:'bottomleft', prefix:false})
       .addAttribution('Imágenes © Esri, Maxar, Earthstar Geographics')
@@ -487,7 +487,8 @@
 
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 20,
-      maxNativeZoom: 19
+      maxNativeZoom: 17,
+      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'
     }).addTo(map);
 
     drawnLayerGroup = L.layerGroup().addTo(map);
