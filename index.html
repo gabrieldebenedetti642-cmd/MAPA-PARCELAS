@@ -1318,8 +1318,11 @@
       updateSyncStatusText();
       updateSyncMenuLabel();
       alert('Sincronización activada con el código "' + code + '". Usá el mismo código en tu otro aparato.');
-    }).catch(function(){
-      alert('No se pudo conectar a la base de datos. Revisá tu conexión e intentá de nuevo.');
+    }).catch(function(err){
+      var code = err && err.code ? err.code : 'desconocido';
+      var msg = err && err.message ? err.message : String(err);
+      alert('No se pudo conectar (código: ' + code + ').\n' + msg);
+      console.error('Sync activate error', err);
     });
   }
 
