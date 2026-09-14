@@ -723,7 +723,7 @@
       (shape.notes ? '<div class="shape-popup-notes">' + escapeHtml(shape.notes) + '</div>' : '') +
       '<button class="shape-popup-del" id="shapePopupDelBtn">Borrar</button>' +
       '</div>';
-    L.popup({ closeButton:true, className:'shape-info-popup' })
+    L.popup({ closeButton:true, className:'shape-info-popup', autoPan:false })
       .setLatLng(latlng)
       .setContent(html)
       .openOn(map);
@@ -755,6 +755,7 @@
 
   function setupDrawingUI(type, title){
     stopGpsTracking();
+    setRotationEnabled(false);
     var info = TYPE_INFO[type];
     document.getElementById('toolbarDefault').style.display = 'none';
     var dt = document.getElementById('toolbarDrawing');
@@ -904,6 +905,7 @@
 
   function cancelDrawing(){
     stopGpsTracking();
+    setRotationEnabled(true);
     clearTempLayers();
     if(editingId){
       var shape = shapes.filter(function(s){ return s.id === editingId; })[0];
@@ -916,6 +918,15 @@
     document.getElementById('toolbarDrawing').classList.remove('show');
     document.getElementById('drawToast').classList.remove('show');
     document.getElementById('gpsToggleBtn').classList.remove('show');
+  }
+
+  function setRotationEnabled(enabled){
+    if(enabled){
+      if(map.touchRotate) map.touchRotate.enable();
+    } else {
+      if(map.setBearing) map.setBearing(0);
+      if(map.touchRotate) map.touchRotate.disable();
+    }
   }
 
   // ---------- GPS tracking mode ----------
