@@ -643,19 +643,51 @@
     layer.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     layer.addTo(drawnLayerGroup);
     layerById[shape.id] = layer;
-    attachLongPress(layer, shape.id);
   }
 
   function escapeHtml(s){
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function attachLongPress(layer, shapeId){
-    layer.on('click', function(e){
-      if(mode) return; // don't interfere while actively drawing something else
-      L.DomEvent.stopPropagation(e);
-      showShapeInfoPopup(shapeId, e.latlng);
-    });
+  function pointInPolygon(latlng, points){
+    var x = latlng.lng, y = latlng.lat;
+    var inside = false;
+    for(var i=0, j=points.length-1; i<points.length; j=i++){
+      var xi = points[i][1], yi = points[i][0];
+      var xj = points[j][1], yj = points[j][0];
+      var intersect = ((yi>y) !== (yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi);
+      if(intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function distanceToSegmentPx(latlng, a, b){
+    var p = map.latLngToLayerPoint(latlng);
+    var pa = map.latLngToLayerPoint(a);
+    var pb = map.latLngToLayerPoint(b);
+    var dx = pb.x - pa.x, dy = pb.y - pa.y;
+    var lengthSq = dx*dx + dy*dy;
+    var t = lengthSq ? ((p.x-pa.x)*dx + (p.y-pa.y)*dy) / lengthSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    var projX = pa.x + t*dx, projY = pa.y + t*dy;
+    var ddx = p.x - projX, ddy = p.y - projY;
+    return Math.sqrt(ddx*ddx + ddy*ddy);
+  }
+
+  function findShapeAtLatLng(latlng){
+    for(var i = shapes.length - 1; i >= 0; i--){
+      var s = shapes[i];
+      var info = TYPE_INFO[s.type];
+      if(info.isPolygon){
+        if(pointInPolygon(latlng, s.points)) return s;
+      } else {
+        var pts = s.points.map(function(p){ return L.latLng(p[0], p[1]); });
+        for(var j=0; j<pts.length-1; j++){
+          if(distanceToSegmentPx(latlng, pts[j], pts[j+1]) < 14) return s;
+        }
+      }
+    }
+    return null;
   }
 
   function showShapeInfoPopup(shapeId, latlng){
@@ -783,8 +815,12 @@
   }
 
   function onMapClick(e){
-    if(!mode) return;
-    addVertex(e.latlng);
+    if(mode){
+      addVertex(e.latlng);
+      return;
+    }
+    var hit = findShapeAtLatLng(e.latlng);
+    if(hit) showShapeInfoPopup(hit.id, e.latlng);
   }
 
   function addVertex(latlng){
