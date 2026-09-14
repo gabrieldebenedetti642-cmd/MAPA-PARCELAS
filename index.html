@@ -139,6 +139,18 @@
     padding:2px 7px !important;border-radius:6px !important;box-shadow:none !important;
   }
   .shape-label::before{display:none !important;}
+  .shape-info-popup .leaflet-popup-content-wrapper{
+    background:var(--bg-card) !important;color:var(--text-light) !important;
+    border-radius:var(--radius-sm) !important;border:1px solid var(--border);
+  }
+  .shape-info-popup .leaflet-popup-tip{background:var(--bg-card) !important;}
+  .shape-info-popup .leaflet-popup-content{margin:12px 14px;font-size:13.5px;line-height:1.4;}
+  .shape-info-popup .leaflet-popup-close-button{color:var(--text-muted) !important;}
+  .shape-popup-notes{font-size:12px;color:var(--text-muted);font-style:italic;margin-top:4px;}
+  .shape-popup-del{
+    margin-top:9px;width:100%;height:36px;border-radius:8px;border:none;
+    background:var(--danger);color:#2a0d0d;font-weight:700;font-size:13px;
+  }
   /* ---------- Bottom toolbar ---------- */
   #toolbarZone{
     flex:0 0 auto;background:var(--bg-dark-t);border-top:1px solid var(--border);
@@ -512,14 +524,21 @@
       if(!cloudShapes) return;
       var json = JSON.stringify(cloudShapes);
       if(json === lastSyncedJson) return;
-      lastSyncedJson = json;
-      if(json !== JSON.stringify(shapes)){
-        shapes = cloudShapes;
-        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
-        redrawAll();
-        updateListBadge();
-        if(document.getElementById('listBackdrop').classList.contains('show')) renderListContent();
+      if(json === JSON.stringify(shapes)) { lastSyncedJson = json; return; }
+      if(cloudShapes.length < shapes.length){
+        // Safety net: never silently erase local data. If the other device
+        // has fewer items, this device's data wins automatically; pushing it
+        // back up brings the cloud (and the other device) back in sync.
+        console.warn('Sync: cloud has fewer items than local, keeping local and re-pushing.');
+        saveShapes();
+        return;
       }
+      lastSyncedJson = json;
+      shapes = cloudShapes;
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
+      redrawAll();
+      updateListBadge();
+      if(document.getElementById('listBackdrop').classList.contains('show')) renderListContent();
     }).catch(function(e){ console.error('Poll error', e); });
   }
 
@@ -624,6 +643,55 @@
     layer.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     layer.addTo(drawnLayerGroup);
     layerById[shape.id] = layer;
+    attachLongPress(layer, shape.id);
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function attachLongPress(layer, shapeId){
+    var timer = null;
+    layer.on('mousedown', function(e){
+      if(mode) return; // don't interfere while actively drawing something else
+      timer = setTimeout(function(){
+        timer = null;
+        showShapeInfoPopup(shapeId, e.latlng);
+      }, 550);
+    });
+    layer.on('mouseup dragstart', function(){
+      if(timer){ clearTimeout(timer); timer = null; }
+    });
+  }
+
+  function showShapeInfoPopup(shapeId, latlng){
+    var shape = shapes.filter(function(s){ return s.id === shapeId; })[0];
+    if(!shape) return;
+    var info = TYPE_INFO[shape.type];
+    var measureText;
+    if(shape.areaHa != null){
+      measureText = fmtHa(shape.areaHa);
+    } else {
+      var pts = shape.points.map(function(p){ return L.latLng(p[0], p[1]); });
+      measureText = formatLength(computeLengthM(pts));
+    }
+    var html = '<div class="shape-popup">' +
+      '<b>' + statusEmoji(shape.status) + escapeHtml(shape.name) + '</b><br>' +
+      escapeHtml(measureText) +
+      (shape.notes ? '<div class="shape-popup-notes">' + escapeHtml(shape.notes) + '</div>' : '') +
+      '<button class="shape-popup-del" id="shapePopupDelBtn">Borrar</button>' +
+      '</div>';
+    L.popup({ closeButton:true, className:'shape-info-popup' })
+      .setLatLng(latlng)
+      .setContent(html)
+      .openOn(map);
+    setTimeout(function(){
+      var btn = document.getElementById('shapePopupDelBtn');
+      if(btn) btn.addEventListener('click', function(){
+        map.closePopup();
+        deleteShape(shapeId);
+      });
+    }, 0);
   }
 
   function redrawAll(){
