@@ -279,6 +279,8 @@
 </header>
 
 <div id="menuPop" class="menu-pop">
+  <button id="syncMenuBtn">Sincronizar con otro aparato</button>
+  <hr>
   <button id="exportBtn">Exportar lista</button>
   <hr>
   <button id="backupBtn">Descargar backup completo</button>
@@ -292,6 +294,20 @@
   <button id="clearAllBtn" class="danger-text">Borrar todo</button>
 </div>
 <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
+
+<div class="backdrop" id="syncBackdrop">
+  <div class="sheet sheet-center">
+    <h2>Sincronización</h2>
+    <p class="field-label" id="syncStatus" style="margin-bottom:14px;">Sin sincronizar (solo este aparato)</p>
+    <span class="field-label">Código (el mismo en tus dos aparatos)</span>
+    <input type="text" class="text-input" id="syncCodeInput" placeholder="Ej: debenedetti2026" autocapitalize="none" autocorrect="off">
+    <div class="btn-row" style="margin-bottom:12px;">
+      <button class="btn" id="syncCancelBtn">Cerrar</button>
+      <button class="btn primary" id="syncActivateBtn">Activar</button>
+    </div>
+    <button id="syncDeactivateBtn" style="width:100%;background:none;border:none;color:var(--danger);font-size:13.5px;padding:8px;">Dejar de sincronizar este aparato</button>
+  </div>
+</div>
 
 <div id="mapWrap">
   <div id="map"></div>
@@ -410,6 +426,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
 (function(){
   "use strict";
@@ -443,6 +461,65 @@
   var GPS_MIN_DISTANCE = 6;   // meters between auto-added points
   var GPS_MAX_ACCURACY = 25;  // ignore GPS readings worse than this many meters
 
+  // ---------- multi-device sync (opt-in, off by default) ----------
+  var firebaseConfig = {
+    apiKey: "AIzaSyC8cyDsoeJk_BLo7Df9B9pJa1KKulj0x8s",
+    authDomain: "mapa-parcelas.firebaseapp.com",
+    projectId: "mapa-parcelas",
+    storageBucket: "mapa-parcelas.firebasestorage.app",
+    messagingSenderId: "789936144104",
+    appId: "1:789936144104:web:c49f3c3123b1b1e21b935d"
+  };
+  var fbApp = null, fbDb = null, syncUnsub = null;
+  var syncCode = null;
+  var applyingRemote = false;
+
+  function initFirebase(){
+    if(fbDb) return true;
+    if(typeof firebase === 'undefined') return false;
+    try{
+      fbApp = firebase.initializeApp(firebaseConfig);
+      fbDb = firebase.firestore();
+      return true;
+    }catch(e){ console.error('Firebase init error', e); return false; }
+  }
+
+  function loadSyncCode(){
+    try{ return localStorage.getItem('mapaParcelas_syncCode') || null; }catch(e){ return null; }
+  }
+  function saveSyncCode(code){
+    try{
+      if(code) localStorage.setItem('mapaParcelas_syncCode', code);
+      else localStorage.removeItem('mapaParcelas_syncCode');
+    }catch(e){}
+  }
+
+  function startSyncListener(code){
+    if(!initFirebase()) return;
+    if(syncUnsub) syncUnsub();
+    syncUnsub = fbDb.collection('mapaParcelasSync').doc(code).onSnapshot(function(doc){
+      if(doc.metadata.hasPendingWrites) return;
+      if(!doc.exists) return;
+      var data = doc.data();
+      if(!data || !Array.isArray(data.shapes)) return;
+      applyingRemote = true;
+      shapes = data.shapes;
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
+      redrawAll();
+      updateListBadge();
+      if(document.getElementById('listBackdrop').classList.contains('show')) renderListContent();
+      applyingRemote = false;
+    }, function(err){ console.error('Sync listener error', err); });
+  }
+
+  function pushToCloud(){
+    if(!syncCode || applyingRemote || !initFirebase()) return;
+    fbDb.collection('mapaParcelasSync').doc(syncCode).set({
+      shapes: shapes,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function(e){ console.error('Sync push error', e); });
+  }
+
   // ---------- persistence ----------
   function loadShapes(){
     try{
@@ -452,6 +529,7 @@
   }
   function saveShapes(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(shapes)); }catch(e){}
+    if(syncCode) pushToCloud();
   }
 
   // ---------- geometry ----------
@@ -1199,6 +1277,61 @@
     closeMenu();
   }
 
+  // ---------- sync modal ----------
+  function updateSyncMenuLabel(){
+    document.getElementById('syncMenuBtn').textContent = syncCode ? 'Sincronización (activa)' : 'Sincronizar con otro aparato';
+  }
+
+  function updateSyncStatusText(){
+    document.getElementById('syncStatus').textContent = syncCode ?
+      'Sincronizado con código: ' + syncCode :
+      'Sin sincronizar (solo este aparato)';
+  }
+
+  function openSyncModal(){
+    document.getElementById('syncCodeInput').value = syncCode || '';
+    updateSyncStatusText();
+    document.getElementById('syncBackdrop').classList.add('show');
+    closeMenu();
+  }
+  function closeSyncModal(){
+    document.getElementById('syncBackdrop').classList.remove('show');
+  }
+
+  function activateSync(){
+    var raw = document.getElementById('syncCodeInput').value.trim();
+    if(!raw){ alert('Escribí un código (podés inventar uno, por ejemplo tu apellido y un número).'); return; }
+    var code = raw.toLowerCase().replace(/\s+/g,'');
+    if(!initFirebase()){ alert('No se pudo conectar. Revisá tu conexión a internet e intentá de nuevo.'); return; }
+    fbDb.collection('mapaParcelasSync').doc(code).get().then(function(doc){
+      if(doc.exists && doc.data() && Array.isArray(doc.data().shapes) && doc.data().shapes.length){
+        var n = doc.data().shapes.length;
+        if(!confirm('Ya hay ' + n + ' elemento(s) guardados con ese código. ¿Reemplazar lo que tenés en ESTE aparato por esos datos?')) return;
+        shapes = doc.data().shapes;
+        redrawAll();
+        updateListBadge();
+      }
+      syncCode = code;
+      saveSyncCode(code);
+      saveShapes();
+      startSyncListener(code);
+      updateSyncStatusText();
+      updateSyncMenuLabel();
+      alert('Sincronización activada con el código "' + code + '". Usá el mismo código en tu otro aparato.');
+    }).catch(function(){
+      alert('No se pudo conectar a la base de datos. Revisá tu conexión e intentá de nuevo.');
+    });
+  }
+
+  function deactivateSync(){
+    if(!confirm('¿Dejar de sincronizar este aparato? Va a seguir funcionando normal, solo que no va a compartir más datos con tu otro aparato.')) return;
+    syncCode = null;
+    saveSyncCode(null);
+    if(syncUnsub){ syncUnsub(); syncUnsub = null; }
+    updateSyncStatusText();
+    updateSyncMenuLabel();
+  }
+
   // ---------- locate ----------
   function locateMe(){
     if(!navigator.geolocation){ alert('Este dispositivo no puede compartir su ubicación.'); return; }
@@ -1282,6 +1415,10 @@
     closeMenu();
   });
   document.getElementById('clearAllBtn').addEventListener('click', clearAllData);
+  document.getElementById('syncMenuBtn').addEventListener('click', openSyncModal);
+  document.getElementById('syncCancelBtn').addEventListener('click', closeSyncModal);
+  document.getElementById('syncActivateBtn').addEventListener('click', activateSync);
+  document.getElementById('syncDeactivateBtn').addEventListener('click', deactivateSync);
 
   document.getElementById('locateBtn').addEventListener('click', locateMe);
   document.getElementById('compassBtn').addEventListener('click', function(){
@@ -1309,6 +1446,9 @@
   });
   shapes = loadShapes();
   redrawAll();
+  updateSyncMenuLabel();
+  syncCode = loadSyncCode();
+  if(syncCode) startSyncListener(syncCode);
   setTimeout(setAppHeight, 300);
 
 })();
