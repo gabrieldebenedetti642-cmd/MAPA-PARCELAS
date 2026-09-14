@@ -211,8 +211,11 @@
   .color-swatch.selected{border-color:var(--text-light);}
   .auto-swatch{background:conic-gradient(#4A90D9,#E8871E,#E23D3D,#4CAF50,#9C27B0,#00BCD4,#E91E8C,#FFC107,#4A90D9);}
   .btn{flex:1;height:46px;border-radius:var(--radius-sm);border:1px solid var(--border);background:rgba(245,243,238,0.05);color:var(--text-light);font-size:14.5px;font-weight:600;}
+  .btn:active{background:rgba(245,243,238,0.18);}
   .btn.primary{background:var(--type-color,var(--parcela));color:#17211c;border-color:transparent;}
+  .btn.primary:active{filter:brightness(0.85);}
   .btn.danger{background:var(--danger);color:#2a0d0d;border-color:transparent;}
+  .btn[disabled]{opacity:0.6;}
   /* list */
   .summary-line{font-size:13px;color:var(--text-muted);margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
   .list-scroll{overflow-y:auto;flex:1;}
@@ -1313,6 +1316,9 @@
     if(!raw){ alert('Escribí un código (podés inventar uno, por ejemplo tu apellido y un número).'); return; }
     var code = raw.toLowerCase().replace(/\s+/g,'');
     if(!initFirebase()){ alert('No se pudo conectar. Revisá tu conexión a internet e intentá de nuevo.'); return; }
+    var btn = document.getElementById('syncActivateBtn');
+    btn.disabled = true;
+    btn.textContent = 'Conectando...';
     withTimeout(fbDb.collection('mapaParcelasSync').doc(code).get(), 8000).then(function(doc){
       if(doc.exists && doc.data() && Array.isArray(doc.data().shapes) && doc.data().shapes.length){
         var n = doc.data().shapes.length;
@@ -1333,6 +1339,9 @@
       var msg = err && err.message ? err.message : String(err);
       alert('No se pudo conectar (código: ' + code + ').\n' + msg);
       console.error('Sync activate error', err);
+    }).finally(function(){
+      btn.disabled = false;
+      btn.textContent = 'Activar';
     });
   }
 
