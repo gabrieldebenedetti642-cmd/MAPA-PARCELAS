@@ -473,6 +473,7 @@
   var gpsFollowMode = true;
   var GPS_MIN_DISTANCE = 6;   // meters between auto-added points
   var GPS_MAX_ACCURACY = 25;  // ignore GPS readings worse than this many meters
+  var GPS_MAX_JUMP = 500;     // ignore jumps between readings larger than this (impossible on foot/vehicle within a farm)
 
   // ---------- multi-device sync (opt-in, off by default) ----------
   var FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/mapa-parcelas/databases/default/documents/mapaParcelasSync/';
@@ -738,6 +739,7 @@
   }
 
   function setupDrawingUI(type, title){
+    stopGpsTracking();
     var info = TYPE_INFO[type];
     document.getElementById('toolbarDefault').style.display = 'none';
     var dt = document.getElementById('toolbarDrawing');
@@ -947,9 +949,16 @@
     }
     if(gpsFollowMode) map.panTo(latlng, { animate:true });
 
-    if(pos.coords.accuracy && pos.coords.accuracy > GPS_MAX_ACCURACY) return;
+    if(typeof pos.coords.accuracy !== 'number' || pos.coords.accuracy > GPS_MAX_ACCURACY) return;
 
-    if(!lastGpsPoint || latlng.distanceTo(lastGpsPoint) >= GPS_MIN_DISTANCE){
+    if(lastGpsPoint){
+      var jump = latlng.distanceTo(lastGpsPoint);
+      if(jump >= GPS_MIN_DISTANCE && jump <= GPS_MAX_JUMP){
+        addVertex(latlng);
+        lastGpsPoint = latlng;
+      }
+      // else: too small to matter, or an impossible jump (bad reading) — ignore either way
+    } else {
       addVertex(latlng);
       lastGpsPoint = latlng;
     }
