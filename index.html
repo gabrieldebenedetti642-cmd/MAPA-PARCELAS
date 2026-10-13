@@ -342,6 +342,14 @@
   .seg.tabs{gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;}
   .seg.tabs button{background:none;border:none;border-bottom:3px solid transparent;border-radius:0;color:var(--text-muted);font-size:15px;min-height:40px;}
   .seg.tabs button.selected{background:none;color:var(--text-light);border-bottom-color:#FFD60A;}
+  /* ---------- Estado de carga del mapa ---------- */
+  .map-status{
+    position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:420;
+    max-width:calc(100% - 140px);padding:7px 14px;border-radius:18px;
+    background:var(--bg-dark-t);border:1px solid var(--border);color:var(--text-light);
+    font-size:12.5px;font-weight:600;line-height:1.3;text-align:center;display:none;
+  }
+  .map-status.show{display:block;}
 </style>
 </head>
 <body>
@@ -368,6 +376,8 @@
 
 <div id="menuPop" class="menu-pop">
   <button id="syncMenuBtn">Sincronizar con otro aparato</button>
+  <hr>
+  <button id="rotateMenuBtn">Girar el mapa con 2 dedos: no</button>
   <hr>
   <button id="exportBtn">Exportar lista</button>
   <hr>
@@ -409,6 +419,7 @@
   <button class="fab-locate" id="locateBtn" aria-label="Mi ubicación">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22"/></svg>
   </button>
+  <div class="map-status" id="mapStatus" role="status" aria-live="polite"></div>
   <button class="fab-compass" id="compassBtn" aria-label="Orientar al norte">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 6.5L14.2 12L12 17.5L9.8 12Z" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="var(--bg-dark)" stroke="none"/></svg>
   </button>
@@ -1135,11 +1146,16 @@
       .addAttribution('Imágenes © Esri, Maxar, Earthstar Geographics')
       .addTo(map);
 
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 20,
+    // maxZoom 19 (antes 20): más allá de eso la imagen ya está agrandada 8 veces y el iPhone se traba.
+    // updateWhenZooming:false: mientras hacés pinza no se piden imágenes de cada nivel intermedio
+    // (en señal floja esos pedidos se cancelaban unos a otros y el mapa quedaba en blanco); se piden al soltar.
+    tileLayerRef = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
       maxNativeZoom: 17,
-      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'
+      updateWhenZooming: false,
+      errorTileUrl: TILE_ERROR_GIF
     }).addTo(map);
+    watchTiles(tileLayerRef);
 
     drawnLayerGroup = L.layerGroup().addTo(map);
     map.setView([-34.6, -63.5], 6);
@@ -1153,6 +1169,101 @@
         map.setView([pos.coords.latitude, pos.coords.longitude], 15);
       }, function(){ /* silent fail on load */ }, { timeout:6000 });
     }
+  }
+
+  // ---------- Carga del mapa: aviso en pantalla y reintento de imágenes que fallaron ----------
+  var TILE_ERROR_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7';
+  var tileLayerRef = null;
+  var tw = { errs:0, pending:[], failed:[], busy:0 };
+  var TILE_MAX_RETRIES = 4;
+
+  function twAlive(list){
+    return list.filter(function(t){ return t.isConnected !== undefined ? t.isConnected : document.documentElement.contains(t); });
+  }
+  function twRemove(list, t){
+    var i = list.indexOf(t);
+    if(i !== -1) list.splice(i, 1);
+  }
+  // Imágenes del mapa que están visibles y todavía no cargaron
+  function twCount(){
+    if(!map) return 0;
+    return map.getContainer().querySelectorAll('.leaflet-tile-pane .leaflet-tile:not(.leaflet-tile-loaded)').length;
+  }
+  // Se mira el estado real cada tanto (no se confía solo en los eventos de Leaflet: si se cancelan imágenes a mitad de camino puede no avisar nunca "terminé")
+  function twTick(){
+    var el = document.getElementById('mapStatus');
+    if(!el || !map || document.hidden) return;
+    tw.pending = twAlive(tw.pending);
+    tw.failed = twAlive(tw.failed);
+    var loading = twCount() + tw.pending.length;
+    if(loading > 0){
+      tw.busy++;
+      if(tw.busy >= 2){                                  // recién si tarda más de ~1 s (para que no parpadee)
+        el.textContent = tw.errs >= 3 ? 'Señal débil · reintentando… (tocá para reintentar ya)' : 'Cargando mapa…';
+        el.classList.add('show');
+      }
+      return;
+    }
+    tw.busy = 0;
+    if(tw.failed.length){
+      el.textContent = 'Faltan imágenes del mapa · tocá para reintentar';
+      el.classList.add('show');
+      return;
+    }
+    tw.errs = 0;
+    el.classList.remove('show');
+  }
+
+  function watchTiles(layer){
+    layer.on('tileload', function(e){
+      var t = e.tile;
+      if(!t || String(t.getAttribute('src')).indexOf('data:image/gif') === 0) return;   // el cuadro vacío de error no cuenta como imagen cargada
+      twRemove(tw.pending, t);
+      twRemove(tw.failed, t);
+    });
+    layer.on('tileerror', function(e){
+      var t = e.tile;
+      if(!t) return;
+      twRemove(tw.pending, t);
+      tw.errs++;
+      var n = t._tries || 0;
+      if(n >= TILE_MAX_RETRIES){                         // ya se intentó varias veces: queda marcada para reintentar tocando el cartel
+        if(tw.failed.indexOf(t) === -1) tw.failed.push(t);
+        return;
+      }
+      t._tries = n + 1;                                  // una imagen que falló se vuelve a pedir en vez de quedar en blanco
+      tw.pending.push(t);
+      setTimeout(function(){
+        var alive = t.isConnected !== undefined ? t.isConnected : document.documentElement.contains(t);
+        if(!alive){ twRemove(tw.pending, t); return; }   // ya salió de pantalla
+        try{ t.src = layer.getTileUrl(e.coords); }catch(err){ twRemove(tw.pending, t); }
+      }, 800 + 1200 * n);
+    });
+    window.addEventListener('online', function(){ if(tileLayerRef) tileLayerRef.redraw(); });
+    var el = document.getElementById('mapStatus');
+    if(el) el.addEventListener('click', function(){
+      tw.errs = 0; tw.failed = []; tw.pending = [];
+      if(tileLayerRef) tileLayerRef.redraw();
+    });
+    setInterval(twTick, 700);
+  }
+
+  // Giro del mapa con dos dedos: apagado de fábrica (al hacer pinza se giraba solo y el mapa quedaba con zonas en blanco)
+  var ROTATE_KEY = 'mapaParcelas_rotate';
+  var rotatePref = false;
+  function loadRotatePref(){
+    try{ return localStorage.getItem(ROTATE_KEY) === '1'; }catch(e){ return false; }
+  }
+  function updateRotateMenuLabel(){
+    document.getElementById('rotateMenuBtn').textContent = 'Girar el mapa con 2 dedos: ' + (rotatePref ? 'sí' : 'no');
+  }
+  function toggleRotatePref(){
+    rotatePref = !rotatePref;
+    try{ localStorage.setItem(ROTATE_KEY, rotatePref ? '1' : '0'); }catch(e){}
+    if(!rotatePref && map.setBearing) map.setBearing(0);
+    setRotationEnabled(!mode);                       // si está dibujando sigue bloqueado
+    updateRotateMenuLabel();
+    closeMenu();
   }
 
   function vertexIcon(color){
@@ -1701,10 +1812,10 @@
   }
 
   function setRotationEnabled(enabled){
-    if(enabled){
+    if(enabled && rotatePref){
       if(map.touchRotate) map.touchRotate.enable();
     } else {
-      if(map.setBearing) map.setBearing(0);
+      if(!enabled && map.setBearing) map.setBearing(0);      // dibujando: el mapa queda mirando al norte
       if(map.touchRotate) map.touchRotate.disable();
     }
   }
@@ -2996,6 +3107,7 @@
   });
   document.getElementById('clearAllBtn').addEventListener('click', clearAllData);
   document.getElementById('syncMenuBtn').addEventListener('click', openSyncModal);
+  document.getElementById('rotateMenuBtn').addEventListener('click', toggleRotatePref);
   document.getElementById('syncCancelBtn').addEventListener('click', closeSyncModal);
   document.getElementById('syncActivateBtn').addEventListener('click', activateSync);
   document.getElementById('syncDeactivateBtn').addEventListener('click', deactivateSync);
@@ -3009,7 +3121,7 @@
   // ---------- viewport height fix (iOS Safari) ----------
   function setAppHeight(){
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
-    if(typeof map !== 'undefined' && map) map.invalidateSize();
+    if(typeof map !== 'undefined' && map) map.invalidateSize({ animate:false, pan:false });
   }
   window.addEventListener('resize', setAppHeight);
   window.addEventListener('orientationchange', function(){ setTimeout(setAppHeight, 200); });
@@ -3020,6 +3132,9 @@
   try{ savedTheme = localStorage.getItem('mapaParcelas_theme') || 'dark'; }catch(e){}
   applyTheme(savedTheme);
   initMap();
+  rotatePref = loadRotatePref();
+  setRotationEnabled(true);
+  updateRotateMenuLabel();
   setupVertexDrag();
   map.on('rotate', function(){
     if(!map.getBearing) return;
