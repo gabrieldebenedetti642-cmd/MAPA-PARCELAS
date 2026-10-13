@@ -132,6 +132,8 @@
     width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid var(--type-color,var(--parcela));
     cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,0.4);
   }
+  .vertex-dot{transition:transform .08s ease;}
+  .vertex-dot.dragging{transform:scale(1.4);box-shadow:0 0 0 6px rgba(255,255,255,0.35),0 1px 4px rgba(0,0,0,0.4);}
   #iconSun{display:none;}
   body.theme-light #iconSun{display:block;}
   body.theme-light #iconMoon{display:none;}
@@ -141,6 +143,9 @@
     padding:2px 7px !important;border-radius:6px !important;box-shadow:none !important;
   }
   .shape-label::before{display:none !important;}
+  .labels-off .shape-label{display:none !important;}
+  .lbl-sm .shape-label{font-size:11px;padding:1px 5px !important;border-radius:5px !important;}
+  .lbl-xs .shape-label{font-size:10px;padding:1px 4px !important;border-radius:4px !important;}
   .shape-info-popup .leaflet-popup-content-wrapper{
     background:var(--bg-card) !important;color:var(--text-light) !important;
     border-radius:var(--radius-sm) !important;border:1px solid var(--border);
@@ -673,7 +678,7 @@
     return '';
   }
 
-  var LABEL_MIN_ZOOM = 15;
+  var LABEL_MIN_ZOOM = 12;   // desde este zoom (vista general del campo) ya se ven los nombres
 
   function polygonCentroid(points){
     var x=0,y=0,area=0,n=points.length;
@@ -779,18 +784,17 @@
     labelMarker.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     labelMarker.addTo(drawnLayerGroup);
     labelMarkerById[shape.id] = labelMarker;
-    var tooltipEl = labelMarker.getTooltip() && labelMarker.getTooltip().getElement();
-    if(tooltipEl) tooltipEl.style.display = (map.getZoom() >= LABEL_MIN_ZOOM) ? '' : 'none';
+    updateLabelVisibility();
   }
 
+  // Las etiquetas se muestran/ocultan y cambian de tamaño con clases en el contenedor del mapa
   function updateLabelVisibility(){
-    var show = map.getZoom() >= LABEL_MIN_ZOOM;
-    Object.keys(labelMarkerById).forEach(function(id){
-      var marker = labelMarkerById[id];
-      var tooltip = marker.getTooltip && marker.getTooltip();
-      var el = tooltip && tooltip.getElement();
-      if(el) el.style.display = show ? '' : 'none';
-    });
+    if(!map) return;
+    var z = map.getZoom();
+    var c = map.getContainer();
+    c.classList.toggle('labels-off', z < LABEL_MIN_ZOOM);
+    c.classList.toggle('lbl-xs', z < 14);
+    c.classList.toggle('lbl-sm', z === 14);
   }
 
   function escapeHtml(s){
@@ -984,21 +988,136 @@
   }
 
   function createVertexMarker(latlng){
-    var marker = L.marker(latlng, { icon: vertexIcon(TYPE_INFO[mode].color), draggable:true, autoPan:true });
-    marker.on('drag', function(){
-      var idx = tempMarkers.indexOf(marker);
-      if(idx === -1) return;
-      drawPoints[idx] = marker.getLatLng();
-      updatePreview();
-      updateDrawUI();
-    });
-    marker.on('click', function(ev){
-      L.DomEvent.stopPropagation(ev);
-      deleteVertex(marker);
-    });
+    // El arrastre lo maneja setupVertexDrag() y no el de Leaflet: así el punto no salta
+    // ni el mapa se desplaza solo (autoPan) mientras lo movés.
+    var marker = L.marker(latlng, { icon: vertexIcon(TYPE_INFO[mode].color), interactive:false, keyboard:false });
     marker.addTo(map);
     tempMarkers.push(marker);
     return marker;
+  }
+
+  // ---------- Arrastre de puntos (propio, preciso) ----------
+  var VERTEX_GRAB_PX = 26;   // zona táctil para agarrar un punto (más grande que el punto visible)
+  var VERTEX_TAP_PX  = 17;   // un toque quieto a esta distancia o menos sobre el punto lo borra
+  var VERTEX_SLOP_PX = 6;    // movimiento mínimo para que cuente como arrastre
+  var vertexDrag = null;
+
+  function vdContainerPoint(clientX, clientY){
+    var r = map.getContainer().getBoundingClientRect();
+    return L.point(clientX - r.left, clientY - r.top);
+  }
+  function vdFindNear(cp){
+    var best = -1, bestD = VERTEX_GRAB_PX + 0.001;
+    for(var i = 0; i < drawPoints.length; i++){
+      var d = map.latLngToContainerPoint(drawPoints[i]).distanceTo(cp);
+      if(d < bestD){ bestD = d; best = i; }
+    }
+    return best;
+  }
+  function vdTouchById(list, id){
+    for(var i = 0; i < list.length; i++){ if(list[i].identifier === id) return list[i]; }
+    return null;
+  }
+  function vdDot(marker){
+    var el = marker.getElement();
+    return el ? el.firstChild : null;
+  }
+  function vdStart(ev){
+    if(!mode) return;
+    var isTouch = !!ev.touches;
+    if(vertexDrag){                                   // ya hay un punto en movimiento: un 2º dedo no debe mover el mapa
+      if(isTouch){ ev.preventDefault(); ev.stopPropagation(); }
+      return;
+    }
+    if(isTouch && ev.touches.length !== 1) return;    // dos dedos = zoom del mapa
+    if(!isTouch && ev.button !== 0) return;
+    var pt = isTouch ? ev.touches[0] : ev;
+    var cp = vdContainerPoint(pt.clientX, pt.clientY);
+    var idx = vdFindNear(cp);
+    if(idx === -1) return;                            // toque en el mapa: lo maneja Leaflet como siempre
+    ev.preventDefault();
+    ev.stopPropagation();
+    if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    var vp = map.latLngToContainerPoint(drawPoints[idx]);
+    vertexDrag = {
+      id: isTouch ? pt.identifier : 'mouse',
+      marker: tempMarkers[idx],
+      offX: vp.x - cp.x, offY: vp.y - cp.y,           // distancia dedo→punto al agarrarlo: el punto no pega el salto
+      startX: pt.clientX, startY: pt.clientY, startT: Date.now(),
+      moved: false, pending: null, raf: 0
+    };
+  }
+  function vdApply(){
+    var d = vertexDrag;
+    if(!d) return;
+    d.raf = 0;
+    if(!d.pending) return;
+    var i = tempMarkers.indexOf(d.marker);
+    if(i === -1) return;
+    var ll = d.pending;
+    d.pending = null;
+    drawPoints[i] = ll;
+    d.marker.setLatLng(ll);
+    updatePreview();
+    updateDrawUI();
+  }
+  function vdMove(ev){
+    var d = vertexDrag;
+    if(!d) return;
+    var pt = ev.touches ? vdTouchById(ev.touches, d.id) : ev;
+    if(!pt) return;
+    ev.preventDefault();
+    if(!d.moved){
+      var dx = pt.clientX - d.startX, dy = pt.clientY - d.startY;
+      if(dx*dx + dy*dy < VERTEX_SLOP_PX * VERTEX_SLOP_PX) return;   // pulso quieto: todavía no es arrastre
+      d.moved = true;
+      var dot = vdDot(d.marker);
+      if(dot) dot.classList.add('dragging');
+    }
+    var cp = vdContainerPoint(pt.clientX, pt.clientY);
+    var size = map.getSize();
+    // el punto queda siempre dentro del mapa visible y sigue al dedo 1 a 1 (sin saltos)
+    var tx = Math.max(0, Math.min(size.x, cp.x + d.offX));
+    var ty = Math.max(0, Math.min(size.y, cp.y + d.offY));
+    d.pending = map.containerPointToLatLng(L.point(tx, ty));
+    if(!d.raf) d.raf = requestAnimationFrame(vdApply);
+  }
+  function vdEnd(ev){
+    var d = vertexDrag;
+    if(!d) return;
+    var pt;
+    if(ev.changedTouches){
+      pt = vdTouchById(ev.changedTouches, d.id);
+      if(!pt) return;
+    } else {
+      pt = ev;
+    }
+    ev.preventDefault();
+    if(d.raf){ cancelAnimationFrame(d.raf); d.raf = 0; }
+    vdApply();                                        // aplica la última posición del dedo
+    var dot = vdDot(d.marker);
+    if(dot) dot.classList.remove('dragging');
+    vertexDrag = null;
+    if(!d.moved && ev.type !== 'touchcancel' && (Date.now() - d.startT) < 700){
+      // toque quieto: sobre el punto lo borra; al lado de un punto (pero no encima) agrega uno nuevo ahí
+      var cp = vdContainerPoint(pt.clientX, pt.clientY);
+      var i = tempMarkers.indexOf(d.marker);
+      if(i !== -1){
+        var dist = map.latLngToContainerPoint(drawPoints[i]).distanceTo(cp);
+        if(dist <= VERTEX_TAP_PX) deleteVertex(d.marker);
+        else addVertex(map.containerPointToLatLng(cp));
+      }
+    }
+  }
+  function setupVertexDrag(){
+    var c = map.getContainer();
+    c.addEventListener('touchstart', vdStart, { capture:true, passive:false });
+    c.addEventListener('mousedown', vdStart, true);
+    document.addEventListener('touchmove', vdMove, { passive:false });
+    document.addEventListener('touchend', vdEnd, { passive:false });
+    document.addEventListener('touchcancel', vdEnd, { passive:false });
+    window.addEventListener('mousemove', vdMove);
+    window.addEventListener('mouseup', vdEnd);
   }
 
   function deleteVertex(marker){
@@ -1011,26 +1130,41 @@
     updateDrawUI();
   }
 
-  function updatePreview(){
+  var previewKind = null, previewHalo = null, previewLine = null;
+  function removePreview(){
     if(tempPreviewLayer){ map.removeLayer(tempPreviewLayer); tempPreviewLayer = null; }
-    if(drawPoints.length < 2) return;
-    var color = TYPE_INFO[mode].color;
+    previewKind = null; previewHalo = null; previewLine = null;
+  }
+
+  function updatePreview(){
+    if(drawPoints.length < 2){ removePreview(); return; }
+    var info = TYPE_INFO[mode];
+    var color = info.color;
+    var kind = (info.isPolygon && drawPoints.length >= 3) ? 'poly' : 'line';
+    if(tempPreviewLayer && kind === previewKind){
+      // mismas líneas, solo cambian los puntos (mucho más fluido al arrastrar)
+      previewHalo.setLatLngs(drawPoints);
+      previewLine.setLatLngs(drawPoints);
+      return;
+    }
+    removePreview();
     var group = L.layerGroup();
-    if(TYPE_INFO[mode].isPolygon && drawPoints.length >= 3){
-      L.polygon(drawPoints, { color:'#fff', weight:7, opacity:1, fill:false }).addTo(group);
-      L.polygon(drawPoints, { color:color, weight:4, fillColor:color, fillOpacity:0.2 }).addTo(group);
+    if(kind === 'poly'){
+      previewHalo = L.polygon(drawPoints, { color:'#fff', weight:7, opacity:1, fill:false }).addTo(group);
+      previewLine = L.polygon(drawPoints, { color:color, weight:4, fillColor:color, fillOpacity:0.2 }).addTo(group);
     } else {
-      L.polyline(drawPoints, { color:'#fff', weight:7, opacity:1 }).addTo(group);
-      L.polyline(drawPoints, { color:color, weight:4 }).addTo(group);
+      previewHalo = L.polyline(drawPoints, { color:'#fff', weight:7, opacity:1 }).addTo(group);
+      previewLine = L.polyline(drawPoints, { color:color, weight:4 }).addTo(group);
     }
     group.addTo(map);
     tempPreviewLayer = group;
+    previewKind = kind;
   }
 
   function clearTempLayers(){
     tempMarkers.forEach(function(m){ map.removeLayer(m); });
     tempMarkers = [];
-    if(tempPreviewLayer){ map.removeLayer(tempPreviewLayer); tempPreviewLayer = null; }
+    removePreview();
   }
 
   function undoLastPoint(){
@@ -1848,6 +1982,7 @@
   try{ savedTheme = localStorage.getItem('mapaParcelas_theme') || 'dark'; }catch(e){}
   applyTheme(savedTheme);
   initMap();
+  setupVertexDrag();
   map.on('rotate', function(){
     if(!map.getBearing) return;
     document.getElementById('compassBtn').style.transform = 'rotate(' + (-map.getBearing()) + 'deg)';
