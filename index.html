@@ -54,7 +54,8 @@
   /* ---------- Header ---------- */
   header{
     flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
-    padding:max(env(safe-area-inset-top,0px) + 2px, 8px) 14px 8px;
+    /* iOS desvanece lo que queda pegado a la hora/isla: el contenido arranca más abajo de esa franja */
+    padding:max(8px, env(safe-area-inset-top,0px) * 1.34) 14px 6px;
     background:var(--bg-dark-t);border-bottom:1px solid var(--border);
     position:relative;z-index:500;
   }
@@ -70,7 +71,7 @@
   }
   .icon-btn:active{background:rgba(245,243,238,0.18);}
   .badge{
-    position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;padding:0 4px;
+    position:absolute;top:0;right:-3px;min-width:19px;height:19px;padding:0 4px;
     background:#F28C1E;color:#161C18;font-size:11px;font-weight:800;line-height:1;
     border-radius:10px;display:flex;align-items:center;justify-content:center;
     box-shadow:0 0 0 2px var(--bg-dark);pointer-events:none;z-index:2;
@@ -222,6 +223,16 @@
     box-shadow:inset 0 0 0 1px rgba(0,0,0,0.15);
   }
   .color-swatch.selected{border-color:var(--text-light);}
+  .color-swatch-custom{
+    position:relative;display:inline-flex;align-items:center;justify-content:center;
+    width:32px;height:32px;border-radius:50%;border:2px dashed var(--text-muted);
+    color:var(--text-muted);font-size:20px;line-height:1;font-weight:600;overflow:hidden;
+    box-sizing:border-box;
+  }
+  .color-swatch-custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;cursor:pointer;}
+  .color-swatch-custom.has-color{border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.15);}
+  .color-swatch-custom.has-color span{display:none;}
+  .color-swatch-custom.selected{border:2px solid var(--text-light);}
   .auto-swatch{background:conic-gradient(#4A90D9,#E8871E,#E23D3D,#4CAF50,#9C27B0,#00BCD4,#E91E8C,#FFC107,#4A90D9);}
   .btn{flex:1;height:46px;border-radius:var(--radius-sm);border:1px solid var(--border);background:rgba(245,243,238,0.05);color:var(--text-light);font-size:14.5px;font-weight:600;}
   .btn:active{background:rgba(245,243,238,0.18);}
@@ -232,8 +243,17 @@
   /* list */
   .summary-line{font-size:13px;color:var(--text-muted);margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
   .list-scroll{overflow-y:auto;flex:1;}
-  .group-title{font-size:11.5px;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-muted);margin:14px 0 6px;}
+  .group-title{
+    display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--text-light);
+    margin:18px 0 2px;padding:0 0 6px;border-bottom:2px solid var(--gcolor,var(--border));
+  }
   .group-title:first-child{margin-top:0;}
+  .group-title .gcount{
+    font-size:12px;font-weight:700;color:var(--text-muted);background:var(--border);
+    border-radius:10px;padding:1px 9px;min-width:22px;text-align:center;
+  }
+  .group-title .gha{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--text-muted);}
+  .group-empty{font-size:13px;color:var(--text-muted);font-style:italic;padding:10px 0 4px;}
   .row-item{
     display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);
   }
@@ -261,7 +281,7 @@
   .undo-toast button{background:none;border:none;color:#4CAF50;font-weight:700;font-size:14px;flex-shrink:0;}
   /* menu popover */
   .menu-pop{
-    position:absolute;top:calc(max(env(safe-area-inset-top,0px) + 2px, 8px) + 44px);right:14px;z-index:1050;
+    position:absolute;top:calc(max(8px, env(safe-area-inset-top,0px) * 1.34) + 44px);right:14px;z-index:1050;
     background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
     min-width:170px;display:none;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.4);
   }
@@ -389,15 +409,30 @@
     </div>
     <span class="field-label">Color del contorno</span>
     <div class="color-picker" id="colorPicker">
-      <button type="button" class="color-swatch auto-swatch" data-color="" title="Automático"></button>
-      <button type="button" class="color-swatch" data-color="#4A90D9" style="background:#4A90D9;"></button>
-      <button type="button" class="color-swatch" data-color="#E8871E" style="background:#E8871E;"></button>
-      <button type="button" class="color-swatch" data-color="#E23D3D" style="background:#E23D3D;"></button>
-      <button type="button" class="color-swatch" data-color="#4CAF50" style="background:#4CAF50;"></button>
-      <button type="button" class="color-swatch" data-color="#9C27B0" style="background:#9C27B0;"></button>
-      <button type="button" class="color-swatch" data-color="#00BCD4" style="background:#00BCD4;"></button>
-      <button type="button" class="color-swatch" data-color="#E91E8C" style="background:#E91E8C;"></button>
-      <button type="button" class="color-swatch" data-color="#FFC107" style="background:#FFC107;"></button>
+      <button type="button" class="color-swatch auto-swatch" data-color="" title="Automático" aria-label="Color automático"></button>
+      <button type="button" class="color-swatch" data-color="#E23D3D" style="background:#E23D3D;" aria-label="Color #E23D3D"></button>
+      <button type="button" class="color-swatch" data-color="#FF6B35" style="background:#FF6B35;" aria-label="Color #FF6B35"></button>
+      <button type="button" class="color-swatch" data-color="#E8871E" style="background:#E8871E;" aria-label="Color #E8871E"></button>
+      <button type="button" class="color-swatch" data-color="#FFC107" style="background:#FFC107;" aria-label="Color #FFC107"></button>
+      <button type="button" class="color-swatch" data-color="#FFEB3B" style="background:#FFEB3B;" aria-label="Color #FFEB3B"></button>
+      <button type="button" class="color-swatch" data-color="#C6FF00" style="background:#C6FF00;" aria-label="Color #C6FF00"></button>
+      <button type="button" class="color-swatch" data-color="#4CAF50" style="background:#4CAF50;" aria-label="Color #4CAF50"></button>
+      <button type="button" class="color-swatch" data-color="#00C853" style="background:#00C853;" aria-label="Color #00C853"></button>
+      <button type="button" class="color-swatch" data-color="#1B5E20" style="background:#1B5E20;" aria-label="Color #1B5E20"></button>
+      <button type="button" class="color-swatch" data-color="#00BFA5" style="background:#00BFA5;" aria-label="Color #00BFA5"></button>
+      <button type="button" class="color-swatch" data-color="#00BCD4" style="background:#00BCD4;" aria-label="Color #00BCD4"></button>
+      <button type="button" class="color-swatch" data-color="#4A90D9" style="background:#4A90D9;" aria-label="Color #4A90D9"></button>
+      <button type="button" class="color-swatch" data-color="#2962FF" style="background:#2962FF;" aria-label="Color #2962FF"></button>
+      <button type="button" class="color-swatch" data-color="#1A237E" style="background:#1A237E;" aria-label="Color #1A237E"></button>
+      <button type="button" class="color-swatch" data-color="#7C4DFF" style="background:#7C4DFF;" aria-label="Color #7C4DFF"></button>
+      <button type="button" class="color-swatch" data-color="#9C27B0" style="background:#9C27B0;" aria-label="Color #9C27B0"></button>
+      <button type="button" class="color-swatch" data-color="#E91E8C" style="background:#E91E8C;" aria-label="Color #E91E8C"></button>
+      <button type="button" class="color-swatch" data-color="#FF80AB" style="background:#FF80AB;" aria-label="Color #FF80AB"></button>
+      <button type="button" class="color-swatch" data-color="#8D6E63" style="background:#8D6E63;" aria-label="Color #8D6E63"></button>
+      <button type="button" class="color-swatch" data-color="#FFFFFF" style="background:#FFFFFF;" aria-label="Color #FFFFFF"></button>
+      <button type="button" class="color-swatch" data-color="#B0BEC5" style="background:#B0BEC5;" aria-label="Color #B0BEC5"></button>
+      <button type="button" class="color-swatch" data-color="#000000" style="background:#000000;" aria-label="Color #000000"></button>
+      <label class="color-swatch-custom" id="customSwatch" title="Elegir otro color"><span>+</span><input type="color" id="customColorInput" value="#4a90d9" aria-label="Elegir otro color"></label>
     </div>
     <span class="field-label">Notas (opcional)</span>
     <textarea class="text-input" id="notesInput" rows="2" maxlength="300" style="resize:none;margin-bottom:14px;"></textarea>
@@ -1156,10 +1191,21 @@
   }
 
   function updateColorPickerUI(){
+    var pc = pendingColor ? String(pendingColor).toLowerCase() : null;
+    var inPalette = false;
     document.querySelectorAll('.color-swatch').forEach(function(btn){
-      var val = btn.dataset.color || null;
-      btn.classList.toggle('selected', val === pendingColor);
+      var val = btn.dataset.color ? btn.dataset.color.toLowerCase() : null;
+      var sel = (val === pc);
+      if(sel) inPalette = true;
+      btn.classList.toggle('selected', sel);
     });
+    // color libre (elegido con el selector): se muestra en el último círculo
+    var custom = document.getElementById('customSwatch');
+    var isCustom = !!pc && !inPalette;
+    custom.classList.toggle('selected', isCustom);
+    custom.classList.toggle('has-color', isCustom);
+    custom.style.background = isCustom ? pc : '';
+    if(isCustom && /^#[0-9a-f]{6}$/.test(pc)) document.getElementById('customColorInput').value = pc;
   }
 
   function selectColor(color){
@@ -1301,7 +1347,12 @@
     }) : shapes;
 
     if(query){
-      summary.textContent = visible.length + ' resultado' + (visible.length!==1?'s':'') + ' para "' + rawQuery + '"';
+      var vc = { campo:0, parcela:0, linea:0 };
+      visible.forEach(function(s){ vc[s.type]++; });
+      summary.textContent = visible.length + ' resultado' + (visible.length!==1?'s':'') + ' para "' + rawQuery + '"' +
+        '  ·  ' + vc.campo + ' campo' + (vc.campo!==1?'s':'') +
+        '  ·  ' + vc.parcela + ' parcela' + (vc.parcela!==1?'s':'') +
+        '  ·  ' + vc.linea + ' línea' + (vc.linea!==1?'s':'');
     } else {
       var counts = { campo:0, parcela:0, linea:0 };
       var parcelaHaTotal = 0;
@@ -1320,13 +1371,37 @@
       return;
     }
 
+    var EMPTY_TEXT = { campo:'Ninguno todavía', parcela:'Ninguna todavía', linea:'Ninguna todavía' };
     ['campo','parcela','linea'].forEach(function(type){
+      var info = TYPE_INFO[type];
       var group = visible.filter(function(s){ return s.type===type; });
-      if(!group.length) return;
       var titleEl = document.createElement('div');
       titleEl.className = 'group-title';
-      titleEl.textContent = TYPE_INFO[type].label + 's';
+      titleEl.style.setProperty('--gcolor', info.color);
+      var nameEl = document.createElement('span');
+      nameEl.className = 'gname';
+      nameEl.textContent = info.label + 's';
+      var countEl = document.createElement('span');
+      countEl.className = 'gcount';
+      countEl.textContent = group.length;
+      titleEl.appendChild(nameEl);
+      titleEl.appendChild(countEl);
+      if(info.isPolygon && group.length){
+        var ha = 0;
+        group.forEach(function(s){ if(s.areaHa) ha += s.areaHa; });
+        var haEl = document.createElement('span');
+        haEl.className = 'gha';
+        haEl.textContent = fmtHa(ha);
+        titleEl.appendChild(haEl);
+      }
       scroll.appendChild(titleEl);
+      if(!group.length){
+        var emptyEl = document.createElement('div');
+        emptyEl.className = 'group-empty';
+        emptyEl.textContent = query ? 'Sin coincidencias' : EMPTY_TEXT[type];
+        scroll.appendChild(emptyEl);
+        return;
+      }
       group.forEach(function(s){
         scroll.appendChild(buildRow(s, query ? words : null));
       });
@@ -1704,6 +1779,12 @@
   document.querySelectorAll('.color-swatch').forEach(function(btn){
     btn.addEventListener('click', function(){ selectColor(btn.dataset.color); });
   });
+  (function(){
+    var ci = document.getElementById('customColorInput');
+    function pick(){ selectColor(ci.value); }
+    ci.addEventListener('input', pick);
+    ci.addEventListener('change', pick);
+  })();
   document.getElementById('undoDeleteBtn').addEventListener('click', undoDelete);
   document.getElementById('nameInput').addEventListener('keydown', function(e){
     if(e.key === 'Enter') confirmSaveShape();
