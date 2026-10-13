@@ -299,6 +299,49 @@
   .menu-pop button.danger-text{color:var(--danger);}
   .menu-pop hr{border:none;border-top:1px solid var(--border);margin:0;}
   .you-marker{width:16px;height:16px;border-radius:50%;background:#4A90D9;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,217,0.35);}
+  /* ---------- Cerco (alambrado / eléctrico) ---------- */
+  :root{ --cerco:#FFD60A; }
+  body.theme-light{ --cerco:#D9A800; }
+  .type-btn.cerco svg{color:var(--cerco);}
+  .seg{display:flex;gap:6px;margin:0 0 12px;}
+  .seg button{
+    flex:1;min-height:42px;padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);
+    background:rgba(245,243,238,0.05);color:var(--text-light);font-size:14px;font-weight:600;line-height:1.15;
+  }
+  .seg button.selected{background:#FFD60A;color:#17211c;border-color:transparent;}
+  .cf-title{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin:16px 0 4px;}
+  .cf-title:first-child{margin-top:2px;}
+  .cf-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .cf-row label{flex:1;min-width:0;font-size:14.5px;line-height:1.25;}
+  .cf-row .cf-sub{display:block;font-size:11.5px;color:var(--text-muted);margin-top:1px;}
+  .cf-row input{
+    width:92px;padding:9px 10px;border-radius:8px;border:1px solid var(--border);
+    background:rgba(245,243,238,0.06);color:var(--text-light);font-size:16px;text-align:right;
+  }
+  .cf-row input:focus{outline:2px solid #FFD60A;}
+  .cf-row input::placeholder{color:var(--text-muted);opacity:.8;}
+  .cf-unit{width:16px;font-size:12.5px;color:var(--text-muted);}
+  .cf-hint{font-size:12.5px;color:var(--text-muted);line-height:1.45;margin:10px 0 2px;}
+  .mat-meta{font-size:13px;color:var(--text-muted);margin:-4px 0 8px;}
+  .mat-short{
+    font-size:15px;font-weight:700;line-height:1.35;padding:10px 12px;margin-bottom:10px;border-radius:var(--radius-sm);
+    background:rgba(255,214,10,0.16);border:1px solid rgba(255,214,10,0.5);
+  }
+  .mat-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);}
+  .mat-row .ml{font-size:14.5px;font-weight:600;min-width:0;}
+  .mat-row .md{display:block;font-size:12px;font-weight:400;color:var(--text-muted);margin-top:1px;}
+  .mat-row .mq{font-size:18px;font-weight:800;white-space:nowrap;}
+  .mat-row.strong{border-bottom:2px solid #FFD60A;}
+  .row-actions button.mat{color:var(--cerco);}
+  .row-item .cerco-sum{font-size:12px;color:var(--text-muted);margin-top:2px;}
+  .shape-popup-btn{
+    margin-top:9px;width:100%;height:36px;border-radius:8px;border:none;
+    background:#FFD60A;color:#17211c;font-weight:700;font-size:13px;
+  }
+  .shape-popup-btn + .shape-popup-del{margin-top:6px;}
+  .seg.tabs{gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;}
+  .seg.tabs button{background:none;border:none;border-bottom:3px solid transparent;border-radius:0;color:var(--text-muted);font-size:15px;min-height:40px;}
+  .seg.tabs button.selected{background:none;color:var(--text-light);border-bottom-color:#FFD60A;}
 </style>
 </head>
 <body>
@@ -385,6 +428,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 10 L13 14 L21 5"/></svg>
       <span>Línea</span>
     </button>
+    <button class="type-btn cerco" data-type="cerco">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5V20M12 5V20M19 5V20"/><path d="M2.5 9H21.5M2.5 15H21.5"/></svg>
+      <span>Cerco</span>
+    </button>
   </div>
   <div id="toolbarDrawing">
     <button class="draw-btn secondary" id="undoBtn" aria-label="Deshacer último punto">
@@ -404,7 +451,7 @@
     <h2 id="nameModalTitle">Nueva Parcela</h2>
     <span class="field-label">Nombre / número</span>
     <input type="text" class="text-input" id="nameInput" maxlength="40">
-    <div class="area-line" id="areaLine" style="display:none;">Área calculada: <b id="areaValue">0 ha</b></div>
+    <div class="area-line" id="areaLine" style="display:none;"><span id="areaLabel">Área calculada:</span> <b id="areaValue">0 ha</b></div>
     <div id="statusField" style="display:none;">
       <span class="field-label">Estado</span>
       <div class="btn-row" style="margin-bottom:14px;">
@@ -479,6 +526,50 @@
   </div>
 </div>
 
+<!-- Cerco: configuración y guardados -->
+<div class="backdrop" id="cercoBackdrop">
+  <div class="sheet" style="height:82vh;">
+    <div class="sheet-handle"></div>
+    <h2>Cerco
+      <button class="close-x" id="cercoCloseBtn" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
+      </button>
+    </h2>
+    <div class="seg tabs">
+      <button type="button" id="cercoTabNew" class="selected">Nuevo</button>
+      <button type="button" id="cercoTabSaved">Guardados</button>
+    </div>
+    <div class="list-scroll" id="cercoBody"></div>
+    <div id="cercoFooter" style="margin-top:12px;">
+      <button class="btn primary" id="cercoMeasureBtn" style="width:100%;--type-color:#FFD60A;">Medir en el mapa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cerco: materiales -->
+<div class="backdrop" id="matBackdrop">
+  <div class="sheet" style="height:82vh;">
+    <div class="sheet-handle"></div>
+    <h2><span id="matTitle">Materiales</span>
+      <button class="close-x" id="matCloseBtn" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
+      </button>
+    </h2>
+    <div class="mat-meta" id="matMeta"></div>
+    <div class="mat-short" id="matShort"></div>
+    <div class="list-scroll" id="matScroll">
+      <div id="matItems"></div>
+      <p class="cf-hint" id="matHint"></p>
+      <div class="cf-title">Datos del cerco</div>
+      <div id="matForm"></div>
+    </div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn" id="matCopyBtn">Copiar</button>
+      <button class="btn primary" id="matShareBtn" style="--type-color:#FFD60A;">Compartir</button>
+    </div>
+  </div>
+</div>
+
 <div id="undoToast" class="undo-toast">
   <span id="undoToastText"></span>
   <button id="undoDeleteBtn">Deshacer</button>
@@ -520,6 +611,20 @@
   var GPS_MIN_DISTANCE = 6;   // meters between auto-added points
   var GPS_MAX_ACCURACY = 25;  // ignore GPS readings worse than this many meters
   var GPS_MAX_JUMP = 500;     // ignore jumps between readings larger than this (impossible on foot/vehicle within a farm)
+  var GPS_MAX_ACCURACY_CERCO = 15;  // un cerco se mide más fino: lecturas peores que esto se ignoran
+
+  // ---------- Cerco (alambrado / eléctrico) ----------
+  var CERCO_COLOR = '#FFD60A';
+  var CERCO_INFO = { label:'Cerco', color:CERCO_COLOR, isPolygon:false, minPoints:2 };
+  var GROUPS = ['campo','parcela','linea','cerco'];
+  var GROUP_TITLE = { campo:'Campos', parcela:'Parcelas', linea:'Líneas', cerco:'Cercos' };
+  var CERCO_PREFS_KEY = 'mapaParcelas_cercoPrefs';
+  var drawCerco = null;       // cerco que se está midiendo o editando (null si es otra cosa)
+  var cercoSetup = null;      // lo elegido en la pestaña Cerco antes de medir
+  var cercoTab = 'nuevo';
+  var matShapeId = null;      // cerco abierto en la pantalla de materiales
+  var matCfg = null;
+  var matSaveTimer = null;
 
   // ---------- multi-device sync (opt-in, off by default) ----------
   var FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/mapa-parcelas/databases/default/documents/mapaParcelasSync/';
@@ -638,6 +743,388 @@
 
   function fmtHa(n){
     return n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ha';
+  }
+
+  // ======================================================================
+  //  CERCOS: alambrado y eléctrico — geometría y lista de materiales
+  // ======================================================================
+  var CERCO_SIMPLIFY_M = 5;    // tolerancia: el ruido del GPS menor a esto no cuenta como curva
+  var CERCO_MIN_SEG_M = 18;    // un tramo más corto que esto es ruido del GPS, no un tramo de cerco
+  var CERCO_TOL_M = 0.5;       // medio metro de margen al contar postes (evita contar uno de más por redondeo)
+  var CERCO_CORNER_JOIN_M = 32; // dos vértices a menos de esto, girando para el mismo lado, son una sola esquina redondeada
+  var CERCO_ANG_MIN = 30;      // giro mínimo (grados) para contar una esquina
+  var CERCO_KIND_LABEL = { alambrado:'Alambrado', electrico:'Eléctrico' };
+
+  function cercoDefaults(kind){
+    if(kind === 'electrico'){
+      return { kind:'electrico', closed:false, p:{ hilos:1, espEstaca:40, angMin:CERCO_ANG_MIN, mRollo:null }, arranques:null, rienda:null, postes:null, fin:'arranque' };
+    }
+    return { kind:'alambrado', closed:false, p:{ espPoste:15, espPique:50, hilos:8, postesPorArranque:2, postesPorRienda:1, angMin:CERCO_ANG_MIN, mRollo:null }, arranques:null, rienda:null, postes:null, fin:'arranque' };
+  }
+
+  // Completa lo que falte (cercos guardados por una versión anterior, o a mano) con los valores por defecto
+  function cercoFull(c){
+    var kind = (c && c.kind === 'electrico') ? 'electrico' : 'alambrado';
+    var out = cercoDefaults(kind), k;
+    if(!c || typeof c !== 'object') return out;
+    out.closed = !!c.closed;
+    out.fin = c.fin === 'rienda' ? 'rienda' : 'arranque';
+    ['arranques', 'rienda', 'postes'].forEach(function(key){
+      var v = c[key];
+      out[key] = (v === null || v === undefined || v === '' || !isFinite(Number(v))) ? null : Math.max(0, Math.round(Number(v)));
+    });
+    if(c.p && typeof c.p === 'object'){
+      for(k in out.p){
+        var pv = c.p[k];
+        if(pv === undefined) continue;
+        if(pv === null || pv === '' || !isFinite(Number(pv))) out.p[k] = (k === 'mRollo') ? null : out.p[k];
+        else out.p[k] = Number(pv);
+      }
+    }
+    return out;
+  }
+
+  function cercoClone(c){ return JSON.parse(JSON.stringify(c)); }
+
+  function cercoProject(points){
+    var R = 6378137, n = points.length, latAvg = 0, i;
+    for(i = 0; i < n; i++) latAvg += points[i][0];
+    latAvg = latAvg / n * Math.PI / 180;
+    var out = [];
+    for(i = 0; i < n; i++){
+      out.push({ x: R * (points[i][1] * Math.PI/180) * Math.cos(latAvg), y: R * (points[i][0] * Math.PI/180) });
+    }
+    return out;
+  }
+
+  function cercoDistPtSeg(p, a, b){
+    var dx = b.x - a.x, dy = b.y - a.y, l2 = dx*dx + dy*dy;
+    var t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    var ex = p.x - (a.x + t*dx), ey = p.y - (a.y + t*dy);
+    return Math.sqrt(ex*ex + ey*ey);
+  }
+
+  // Douglas-Peucker (sin recursión): devuelve los índices que se conservan
+  function cercoSimplify(pts, eps){
+    var n = pts.length, i;
+    if(n < 3){ var all = []; for(i = 0; i < n; i++) all.push(i); return all; }
+    var keep = []; for(i = 0; i < n; i++) keep.push(false);
+    keep[0] = keep[n-1] = true;
+    var stack = [[0, n-1]];
+    while(stack.length){
+      var seg = stack.pop(), a = seg[0], b = seg[1], maxD = 0, idx = -1;
+      for(i = a + 1; i < b; i++){
+        var d = cercoDistPtSeg(pts[i], pts[a], pts[b]);
+        if(d > maxD){ maxD = d; idx = i; }
+      }
+      if(idx > -1 && maxD > eps){ keep[idx] = true; stack.push([a, idx], [idx, b]); }
+    }
+    var res = [];
+    for(i = 0; i < n; i++) if(keep[i]) res.push(i);
+    return res;
+  }
+
+  function cercoTurnDeg(a, b, c){
+    var v1x = b.x - a.x, v1y = b.y - a.y, v2x = c.x - b.x, v2y = c.y - b.y;
+    var l1 = Math.sqrt(v1x*v1x + v1y*v1y), l2 = Math.sqrt(v2x*v2x + v2y*v2y);
+    if(!l1 || !l2) return 0;
+    var cos = (v1x*v2x + v1y*v2y) / (l1*l2);
+    cos = Math.max(-1, Math.min(1, cos));
+    return Math.acos(cos) * 180 / Math.PI;
+  }
+
+  // Promedia cada punto con sus vecinos (solo para recorridos de GPS, que tienen mucho ruido)
+  function cercoSmooth(xy, half, isRing){
+    var n = isRing ? xy.length - 1 : xy.length, out = [], i, j;
+    for(i = 0; i < n; i++){
+      var w = isRing ? half : Math.min(half, i, n - 1 - i), sx = 0, sy = 0, c = 0;
+      for(j = -w; j <= w; j++){
+        var k = isRing ? (i + j + n) % n : i + j;
+        sx += xy[k].x; sy += xy[k].y; c++;
+      }
+      out.push({ x: sx / c, y: sy / c });
+    }
+    if(isRing) out.push({ x: out[0].x, y: out[0].y });
+    return out;
+  }
+
+  // El promediado del GPS redondea las esquinas y las parte en dos vértices pegados:
+  // los junta en uno solo, en el punto donde se cruzan los dos lados rectos
+  function cercoRoundCorners(pts, isRing, maxD){
+    var a = pts.slice(), changed = true, guard = 0;
+    if(isRing) a.pop();                                   // sin el punto repetido del cierre
+    function dist(p, q){ var dx = p.x - q.x, dy = p.y - q.y; return Math.sqrt(dx*dx + dy*dy); }
+    function cross(p, q, r){ return (q.x - p.x) * (r.y - q.y) - (q.y - p.y) * (r.x - q.x); }
+    while(changed && guard++ < 200){
+      changed = false;
+      var n = a.length;
+      if(n < (isRing ? 4 : 4)) break;
+      for(var i = 0; i < (isRing ? n : n - 1); i++){
+        var j = (i + 1) % n;
+        var h = isRing ? (i - 1 + n) % n : i - 1, k = isRing ? (j + 1) % n : j + 1;
+        if(h < 0 || k >= n) continue;                       // extremos de una línea abierta: no se tocan
+        if(dist(a[i], a[j]) >= maxD) continue;
+        var c1 = cross(a[h], a[i], a[j]), c2 = cross(a[i], a[j], a[k]);
+        if(c1 * c2 <= 0) continue;                          // giran para lados distintos: no es una esquina partida
+        if(cercoTurnDeg(a[h], a[i], a[j]) < 8 || cercoTurnDeg(a[i], a[j], a[k]) < 8) continue;
+        // intersección de la recta h→i con la recta j→k
+        var d1x = a[i].x - a[h].x, d1y = a[i].y - a[h].y, d2x = a[k].x - a[j].x, d2y = a[k].y - a[j].y;
+        var den = d1x * d2y - d1y * d2x, np;
+        var mid = { x: (a[i].x + a[j].x) / 2, y: (a[i].y + a[j].y) / 2 };
+        if(Math.abs(den) > 1e-9){
+          var t = ((a[j].x - a[i].x) * d2y - (a[j].y - a[i].y) * d2x) / den;
+          np = { x: a[i].x + t * d1x, y: a[i].y + t * d1y };
+          if(dist(np, mid) > maxD * 1.5) np = mid;
+        } else np = mid;
+        if(isRing){
+          var hi = Math.max(i, j), lo = Math.min(i, j);
+          if(lo === 0 && hi === n - 1){ a.splice(hi, 1); a[0] = np; }   // el par cruza el cierre del anillo
+          else { a.splice(hi, 1); a[lo] = np; }
+        } else { a.splice(j, 1); a[i] = np; }
+        changed = true; break;
+      }
+    }
+    if(isRing) a.push({ x: a[0].x, y: a[0].y });
+    return a;
+  }
+
+  // Afina las esquinas de un recorrido de GPS: ajusta una recta a los puntos reales de cada lado
+  // y pone la esquina donde se cruzan (el promediado las dejaba "cortadas" y el largo salía corto)
+  function cercoRefine(raw, sp, isRing, angMin){
+    var m = sp.length, nv = isRing ? m - 1 : m, segN = isRing ? nv : nv - 1, s, i, j;
+    if(nv < 3 || raw.length < 6) return sp;
+    function nx(i){ return isRing ? (i + 1) % nv : i + 1; }
+    var turn = [];
+    for(i = 0; i < nv; i++){
+      if(!isRing && (i === 0 || i === nv - 1)) { turn.push(0); continue; }
+      turn.push(cercoTurnDeg(sp[(i - 1 + nv) % nv], sp[i], sp[(i + 1) % nv]));
+    }
+    var buckets = []; for(s = 0; s < segN; s++) buckets.push([]);
+    for(j = 0; j < raw.length; j++){
+      var best = -1, bd = 1e18, bt = 0;
+      for(s = 0; s < segN; s++){
+        var a = sp[s], b = sp[nx(s)], dx = b.x - a.x, dy = b.y - a.y, l2 = dx*dx + dy*dy;
+        var t = l2 ? ((raw[j].x - a.x) * dx + (raw[j].y - a.y) * dy) / l2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        var ex = raw[j].x - (a.x + t*dx), ey = raw[j].y - (a.y + t*dy), d = ex*ex + ey*ey;
+        if(d < bd){ bd = d; best = s; bt = t * Math.sqrt(l2); }
+      }
+      buckets[best].push({ p: raw[j], t: bt });
+    }
+    var lines = [];
+    for(s = 0; s < segN; s++){
+      var A = sp[s], B = sp[nx(s)], len = Math.sqrt(Math.pow(B.x - A.x, 2) + Math.pow(B.y - A.y, 2));
+      var trim = Math.min(12, len * 0.25), pts = [];
+      for(j = 0; j < buckets[s].length; j++){
+        var bb = buckets[s][j];
+        if(bb.t >= trim && bb.t <= len - trim) pts.push(bb.p);
+      }
+      if(pts.length < 4 || len < 25){ lines.push(null); continue; }
+      var cx = 0, cy = 0; for(j = 0; j < pts.length; j++){ cx += pts[j].x; cy += pts[j].y; }
+      cx /= pts.length; cy /= pts.length;
+      var sxx = 0, syy = 0, sxy = 0;
+      for(j = 0; j < pts.length; j++){ var qx = pts[j].x - cx, qy = pts[j].y - cy; sxx += qx*qx; syy += qy*qy; sxy += qx*qy; }
+      var ang = 0.5 * Math.atan2(2*sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang);
+      if(ux * (B.x - A.x) + uy * (B.y - A.y) < 0){ ux = -ux; uy = -uy; }   // misma orientación que el lado
+      lines.push({ x: cx, y: cy, ux: ux, uy: uy });
+    }
+    var out = [];
+    for(i = 0; i < nv; i++){
+      var P = sp[i], np = P;
+      var lPrev = isRing ? lines[(i - 1 + segN) % segN] : (i > 0 ? lines[i - 1] : null);
+      var lNext = (isRing || i < segN) ? lines[i % segN] : null;
+      if(!isRing && i === 0){
+        if(lNext){ var tt = (P.x - lNext.x) * lNext.ux + (P.y - lNext.y) * lNext.uy; np = { x: lNext.x + tt * lNext.ux, y: lNext.y + tt * lNext.uy }; }
+      } else if(!isRing && i === nv - 1){
+        if(lPrev){ var t2 = (P.x - lPrev.x) * lPrev.ux + (P.y - lPrev.y) * lPrev.uy; np = { x: lPrev.x + t2 * lPrev.ux, y: lPrev.y + t2 * lPrev.uy }; }
+      } else if(turn[i] >= angMin && lPrev && lNext){
+        var den = lPrev.ux * lNext.uy - lPrev.uy * lNext.ux;
+        if(Math.abs(den) > 0.2){                                   // rectas no casi paralelas
+          var tc = ((lNext.x - lPrev.x) * lNext.uy - (lNext.y - lPrev.y) * lNext.ux) / den;
+          var cand = { x: lPrev.x + tc * lPrev.ux, y: lPrev.y + tc * lPrev.uy };
+          var mv = Math.sqrt(Math.pow(cand.x - P.x, 2) + Math.pow(cand.y - P.y, 2));
+          if(mv <= 25) np = cand;
+        }
+      }
+      out.push(np);
+    }
+    if(isRing) out.push({ x: out[0].x, y: out[0].y });
+    return out;
+  }
+
+  // Saca los vértices que dejan tramos demasiado cortos (ruido del GPS cerca de los extremos o de otro punto)
+  function cercoMergeShort(pts, minSeg){
+    var a = pts.slice(), changed = true;
+    function d2(p, q){ var dx = p.x - q.x, dy = p.y - q.y; return Math.sqrt(dx*dx + dy*dy); }
+    while(changed && a.length > 2){
+      changed = false;
+      for(var i = 0; i < a.length - 1; i++){
+        if(d2(a[i], a[i+1]) >= minSeg) continue;
+        var rm;
+        if(i === 0) rm = i + 1;
+        else if(i + 1 === a.length - 1) rm = i;
+        else rm = cercoTurnDeg(a[i-1], a[i], a[i+1]) < cercoTurnDeg(a[i], a[i+1], a[i+2]) ? i : i + 1;
+        if(rm <= 0 || rm >= a.length - 1) continue;
+        a.splice(rm, 1); changed = true; break;
+      }
+    }
+    return a;
+  }
+
+  // Largo, esquinas y tramos rectos de un cerco (abierto o cerrado)
+  function cercoGeometry(points, closed, angMin){
+    var out = { rawM:0, lengthM:0, runs:[], corners:0, ends:0, ring0:false };
+    var n = points.length, i;
+    if(n < 2) return out;
+    angMin = angMin > 0 ? angMin : CERCO_ANG_MIN;
+    var isRing = !!closed && n >= 3;
+    var xy = cercoProject(points);
+    if(isRing) xy.push({ x: xy[0].x, y: xy[0].y });
+    for(i = 1; i < xy.length; i++){
+      var dx = xy[i].x - xy[i-1].x, dy = xy[i].y - xy[i-1].y;
+      out.rawM += Math.sqrt(dx*dx + dy*dy);
+    }
+    // ¿Recorrido de GPS (muchos puntos muy juntos) o trazado a mano (pocos puntos, uno por esquina)?
+    var steps = [];
+    for(i = 1; i < xy.length; i++){
+      var sx2 = xy[i].x - xy[i-1].x, sy2 = xy[i].y - xy[i-1].y;
+      steps.push(Math.sqrt(sx2*sx2 + sy2*sy2));
+    }
+    steps.sort(function(a, b){ return a - b; });
+    var dense = n >= 8 && steps[Math.floor(steps.length / 2)] < 12;
+    var work = dense ? cercoSmooth(xy, 2, isRing) : xy;
+    var keep = cercoSimplify(work, dense ? CERCO_SIMPLIFY_M : 2);
+    var kept = keep.map(function(k){ return work[k]; });
+    if(dense) kept = cercoRoundCorners(kept, isRing, CERCO_CORNER_JOIN_M);
+    var sp = cercoMergeShort(kept, dense ? CERCO_MIN_SEG_M : 3);
+    if(dense) sp = cercoRefine(isRing ? xy.slice(0, xy.length - 1) : xy, sp, isRing, angMin);
+    var m = sp.length;
+    var cum = [0];
+    for(i = 1; i < m; i++){
+      var ddx = sp[i].x - sp[i-1].x, ddy = sp[i].y - sp[i-1].y;
+      cum.push(cum[i-1] + Math.sqrt(ddx*ddx + ddy*ddy));
+    }
+    var total = cum[m-1], cuts = [];
+    if(isRing){
+      var rv = m - 1;                       // vértices distintos del anillo (el último repite al primero)
+      if(rv >= 3){
+        for(i = 0; i < rv; i++){
+          var prev = sp[(i - 1 + rv) % rv], next = sp[(i + 1) % rv];
+          if(cercoTurnDeg(prev, sp[i], next) >= angMin) cuts.push(i);
+        }
+      }
+      out.corners = cuts.length;
+      if(!cuts.length){ out.ring0 = true; out.runs = [total]; }
+      else {
+        for(i = 0; i < cuts.length; i++){
+          if(i < cuts.length - 1) out.runs.push(cum[cuts[i+1]] - cum[cuts[i]]);
+          else out.runs.push(total - cum[cuts[i]] + cum[cuts[0]]);
+        }
+      }
+    } else {
+      cuts.push(0);
+      for(i = 1; i < m - 1; i++){
+        if(cercoTurnDeg(sp[i-1], sp[i], sp[i+1]) >= angMin) cuts.push(i);
+      }
+      cuts.push(m - 1);
+      out.corners = cuts.length - 2;
+      out.ends = 2;
+      for(i = 1; i < cuts.length; i++) out.runs.push(cum[cuts[i]] - cum[cuts[i-1]]);
+    }
+    out.lengthM = total;
+    return out;
+  }
+
+  function cercoNum(v, def){
+    var n = (v === null || v === undefined || v === '') ? NaN : Number(v);
+    return isFinite(n) ? n : def;
+  }
+  function cercoSpans(d, esp){
+    if(!(esp > 0) || d <= 0) return 0;
+    return Math.max(1, Math.ceil((d - CERCO_TOL_M) / esp));
+  }
+  function fmtN(n){ return Math.round(n).toLocaleString('es-AR'); }
+  function fmtSp(n){ return (Math.round(n * 10) / 10).toLocaleString('es-AR', { maximumFractionDigits:1 }); }   // 12,5 se muestra 12,5 (no 13)
+
+  // Lista de materiales
+  function cercoMaterials(points, cerco){
+    cerco = cercoFull(cerco);
+    var p = cerco.p;
+    var geo = cercoGeometry(points, !!cerco.closed, p.angMin);
+    var L = geo.lengthM;
+    var hilos = Math.max(1, Math.round(cercoNum(p.hilos, 1)));
+    var res = { geo:geo, kind:cerco.kind, hilos:hilos, items:[], short:'', sites: geo.corners + geo.ends };
+    var alambre = hilos * L;
+    var mRollo = cercoNum(p.mRollo, 0);
+    var i;
+
+    if(cerco.kind === 'electrico'){
+      var esp = cercoNum(p.espEstaca, 40);
+      var estacas = 0;
+      if(geo.ring0){ estacas = cercoSpans(L, esp); }
+      else {
+        for(i = 0; i < geo.runs.length; i++) estacas += Math.max(1, cercoSpans(geo.runs[i], esp));
+        if(!cerco.closed) estacas += 1;
+      }
+      var postes = Math.max(0, Math.round(cercoNum(cerco.postes, 0)));
+      res.estacas = estacas; res.postes = postes; res.alambre = alambre;
+      res.items.push({ key:'estacas', label:'Estacas', qty:estacas, unit:'', detail:'una cada ' + fmtSp(esp) + ' m' });
+      if(postes > 0) res.items.push({ key:'postes', label:'Postes', qty:postes, unit:'', detail:'los que cargaste' });
+      res.items.push({ key:'alambre', label:'Alambre / hilo', qty:alambre, unit:' m', detail:hilos + (hilos === 1 ? ' hilo' : ' hilos') + ' × ' + fmtN(L) + ' m' });
+      if(mRollo > 0) res.items.push({ key:'rollos', label:'Rollos', qty:Math.ceil(alambre / mRollo - 1e-6), unit:'', detail:'de ' + fmtN(mRollo) + ' m' });
+      res.short = fmtN(estacas) + ' estacas · ' + fmtN(alambre) + ' m de hilo';
+      return res;
+    }
+
+    var espPoste = cercoNum(p.espPoste, 15), espPique = cercoNum(p.espPique, 50);
+    var ppa = Math.max(0, cercoNum(p.postesPorArranque, 2)), ppr = Math.max(0, cercoNum(p.postesPorRienda, 1));
+    var comunes = 0, piques = 0;
+    if(geo.ring0){ comunes = cercoSpans(L, espPoste); piques = cercoSpans(L, espPique); }
+    else {
+      for(i = 0; i < geo.runs.length; i++){
+        comunes += Math.max(0, cercoSpans(geo.runs[i], espPoste) - 1);
+        piques  += Math.max(0, cercoSpans(geo.runs[i], espPique) - 1);
+      }
+    }
+    var sites = res.sites;
+    var rBlank = (cerco.rienda === null || cerco.rienda === undefined || cerco.rienda === '');
+    var aBlank = (cerco.arranques === null || cerco.arranques === undefined || cerco.arranques === '');
+    var aMan = aBlank ? 0 : Math.max(0, Math.round(Number(cerco.arranques)));
+    var rienda = rBlank ? (cerco.fin === 'rienda' ? Math.max(0, sites - aMan) : 0) : Math.max(0, Math.round(Number(cerco.rienda)));
+    var arr = aBlank ? Math.max(0, sites - rienda) : aMan;
+    res.riendaAuto = cerco.fin === 'rienda' ? Math.max(0, sites - aMan) : 0;
+    var postesArr = arr * ppa, postesRie = rienda * ppr;
+    var total = comunes + postesArr + postesRie;
+    res.comunes = comunes; res.piques = piques; res.arranques = arr; res.rienda = rienda;
+    res.postesArranque = postesArr; res.postesRienda = postesRie; res.postesTotal = total; res.alambre = alambre;
+    res.arranquesAuto = Math.max(0, sites - rienda);
+    res.items.push({ key:'comunes', label:'Postes comunes', qty:comunes, unit:'', detail:'uno cada ' + fmtSp(espPoste) + ' m' });
+    if(arr > 0) res.items.push({ key:'arranques', label:'Arranques', qty:arr, unit:'', detail:fmtN(ppa) + ' postes c/u = ' + fmtN(postesArr) + ' postes' });
+    if(rienda > 0) res.items.push({ key:'rienda', label:'Palos con rienda', qty:rienda, unit:'', detail:fmtN(ppr) + (ppr === 1 ? ' poste' : ' postes') + ' + rienda c/u = ' + fmtN(postesRie) + ' postes' });
+    res.items.push({ key:'total', label:'Postes en total', qty:total, unit:'', detail:'', strong:true });
+    res.items.push({ key:'piques', label:'Piques', qty:piques, unit:'', detail:'uno cada ' + fmtSp(espPique) + ' m' });
+    res.items.push({ key:'alambre', label:'Alambre', qty:alambre, unit:' m', detail:hilos + (hilos === 1 ? ' hilo' : ' hilos') + ' × ' + fmtN(L) + ' m' });
+    if(mRollo > 0) res.items.push({ key:'rollos', label:'Rollos', qty:Math.ceil(alambre / mRollo - 1e-6), unit:'', detail:'de ' + fmtN(mRollo) + ' m' });
+    res.short = fmtN(total) + ' postes · ' + fmtN(piques) + ' piques · ' + fmtN(alambre) + ' m de alambre';
+    return res;
+  }
+
+  // Texto para copiar / compartir
+  function cercoText(name, cerco, res, areaHa){
+    var kindLabel = CERCO_KIND_LABEL[cerco.kind] || 'Cerco';
+    var lines = [];
+    lines.push(kindLabel.toUpperCase() + ' — ' + name);
+    var forma = cerco.closed ? 'Perímetro cerrado' : 'Línea abierta';
+    lines.push(forma + ' · ' + fmtN(res.geo.lengthM) + ' m' + (cerco.closed && areaHa != null ? ' · ' + areaHa.toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' ha' : ''));
+    lines.push('Esquinas: ' + res.geo.corners + (cerco.closed ? '' : ' · Extremos: 2'));
+    lines.push('');
+    lines.push('MATERIALES');
+    res.items.forEach(function(it){
+      var q = it.unit ? fmtN(it.qty) + it.unit : fmtN(it.qty);
+      lines.push('- ' + it.label + ': ' + q + (it.detail ? ' (' + it.detail + ')' : ''));
+    });
+    return lines.join('\n');
   }
 
   // ---------- map setup ----------
@@ -767,11 +1254,16 @@
   }
 
   function renderShapeOnMap(shape){
-    var info = TYPE_INFO[shape.type];
+    var cer = isCerco(shape);
+    var info = infoOf(shape);
     var color = shape.color || info.color;
     var latlngs = shape.points.map(function(p){ return L.latLng(p[0], p[1]); });
     var layer;
-    if(info.isPolygon){
+    if(cer){
+      var cf = cercoFull(shape.cerco);
+      var lopts = { color: color, weight:4, fill:false, dashArray: cf.kind === 'electrico' ? '10 7' : null };
+      layer = (cf.closed && latlngs.length >= 3) ? L.polygon(latlngs, lopts) : L.polyline(latlngs, lopts);
+    } else if(info.isPolygon){
       layer = L.polygon(latlngs, { color: color, weight:2, fillColor: color, fillOpacity:0.18 });
     } else {
       layer = L.polyline(latlngs, { color: color, weight:4 });
@@ -779,7 +1271,7 @@
     layer.addTo(drawnLayerGroup);
     layerById[shape.id] = layer;
 
-    var labelLatLng = info.isPolygon ? findLabelPosition(shape.points) : latlngs[Math.floor(latlngs.length/2)];
+    var labelLatLng = (!cer && info.isPolygon) ? findLabelPosition(shape.points) : latlngs[Math.floor(latlngs.length/2)];
     var labelMarker = L.marker(labelLatLng, { icon: L.divIcon({className:'', html:'', iconSize:[0,0]}), interactive:false });
     labelMarker.bindTooltip(statusEmoji(shape.status) + shape.name, { permanent:true, direction:'center', className:'shape-label' });
     labelMarker.addTo(drawnLayerGroup);
@@ -829,13 +1321,14 @@
   function findShapeAtLatLng(latlng){
     for(var i = shapes.length - 1; i >= 0; i--){
       var s = shapes[i];
-      var info = TYPE_INFO[s.type];
-      if(info.isPolygon){
+      var info = infoOf(s);
+      if(!isCerco(s) && info.isPolygon){
         if(pointInPolygon(latlng, s.points)) return s;
       } else {
         var pts = s.points.map(function(p){ return L.latLng(p[0], p[1]); });
-        for(var j=0; j<pts.length-1; j++){
-          if(distanceToSegmentPx(latlng, pts[j], pts[j+1]) < 14) return s;
+        var nSeg = (isCerco(s) && s.cerco.closed && pts.length > 2) ? pts.length : pts.length - 1;   // un cerco cerrado también tiene el tramo de cierre
+        for(var j=0; j<nSeg; j++){
+          if(distanceToSegmentPx(latlng, pts[j], pts[(j+1) % pts.length]) < 14) return s;
         }
       }
     }
@@ -845,9 +1338,14 @@
   function showShapeInfoPopup(shapeId, latlng){
     var shape = shapes.filter(function(s){ return s.id === shapeId; })[0];
     if(!shape) return;
-    var info = TYPE_INFO[shape.type];
+    var cer = isCerco(shape);
     var measureText;
-    if(shape.areaHa != null){
+    var extraHtml = '';
+    if(cer){
+      measureText = cercoShortDesc(shape);
+      var res = cercoResFor(shape);
+      if(res) extraHtml = '<div class="shape-popup-notes" style="font-style:normal;">' + escapeHtml(res.short) + '</div>';
+    } else if(shape.areaHa != null){
       measureText = fmtHa(shape.areaHa);
     } else {
       var pts = shape.points.map(function(p){ return L.latLng(p[0], p[1]); });
@@ -855,8 +1353,9 @@
     }
     var html = '<div class="shape-popup">' +
       '<b>' + statusEmoji(shape.status) + escapeHtml(shape.name) + '</b><br>' +
-      escapeHtml(measureText) +
+      escapeHtml(measureText) + extraHtml +
       (shape.notes ? '<div class="shape-popup-notes">' + escapeHtml(shape.notes) + '</div>' : '') +
+      (cer ? '<button class="shape-popup-btn" id="shapePopupMatBtn">Ver materiales</button>' : '') +
       '<button class="shape-popup-del" id="shapePopupDelBtn">Borrar</button>' +
       '</div>';
     L.popup({ closeButton:true, className:'shape-info-popup', autoPan:false })
@@ -868,6 +1367,11 @@
       if(btn) btn.addEventListener('click', function(){
         map.closePopup();
         deleteShape(shapeId);
+      });
+      var mbtn = document.getElementById('shapePopupMatBtn');
+      if(mbtn) mbtn.addEventListener('click', function(){
+        map.closePopup();
+        openMaterials(shapeId);
       });
     }, 0);
   }
@@ -883,6 +1387,7 @@
   // ---------- drawing flow ----------
   function startDrawing(type){
     mode = type;
+    drawCerco = null;
     editingId = null;
     drawPoints = [];
     clearTempLayers();
@@ -893,7 +1398,7 @@
   function setupDrawingUI(type, title){
     stopGpsTracking();
     setRotationEnabled(false);
-    var info = TYPE_INFO[type];
+    var info = curInfo();
     document.getElementById('toolbarDefault').style.display = 'none';
     var dt = document.getElementById('toolbarDrawing');
     dt.classList.add('show');
@@ -915,15 +1420,17 @@
     var shape = shapes.filter(function(s){ return s.id === id; })[0];
     if(!shape) return;
     closeListModal();
+    closeCercoSheet();
     var oldLayer = layerById[id];
     if(oldLayer) drawnLayerGroup.removeLayer(oldLayer);
     var oldLabel = labelMarkerById[id];
     if(oldLabel) drawnLayerGroup.removeLayer(oldLabel);
     editingId = id;
     mode = shape.type;
+    drawCerco = isCerco(shape) ? cercoFull(shape.cerco) : null;
     drawPoints = [];
     clearTempLayers();
-    setupDrawingUI(shape.type, 'Editando ' + TYPE_INFO[shape.type].label);
+    setupDrawingUI(shape.type, drawCerco ? cercoDrawTitle('Editando') : 'Editando ' + TYPE_INFO[shape.type].label);
     shape.points.forEach(function(p){
       var latlng = L.latLng(p[0], p[1]);
       drawPoints.push(latlng);
@@ -957,10 +1464,12 @@
   }
 
   function updateDrawUI(){
-    var info = TYPE_INFO[mode];
+    var info = curInfo();
     var n = drawPoints.length;
     var measure = '';
-    if(info.isPolygon){
+    if(drawCerco){
+      measure = cercoDrawMeasure();
+    } else if(info.isPolygon){
       if(n >= 3) measure = fmtHa(computeAreaHa(drawPoints));
     } else if(n >= 2){
       measure = formatLength(computeLengthM(drawPoints));
@@ -990,7 +1499,7 @@
   function createVertexMarker(latlng){
     // El arrastre lo maneja setupVertexDrag() y no el de Leaflet: así el punto no salta
     // ni el mapa se desplaza solo (autoPan) mientras lo movés.
-    var marker = L.marker(latlng, { icon: vertexIcon(TYPE_INFO[mode].color), interactive:false, keyboard:false });
+    var marker = L.marker(latlng, { icon: vertexIcon(curInfo().color), interactive:false, keyboard:false });
     marker.addTo(map);
     tempMarkers.push(marker);
     return marker;
@@ -1138,8 +1647,9 @@
 
   function updatePreview(){
     if(drawPoints.length < 2){ removePreview(); return; }
-    var info = TYPE_INFO[mode];
+    var info = curInfo();
     var color = info.color;
+    var dash = (drawCerco && drawCerco.kind === 'electrico') ? '10 7' : null;
     var kind = (info.isPolygon && drawPoints.length >= 3) ? 'poly' : 'line';
     if(tempPreviewLayer && kind === previewKind){
       // mismas líneas, solo cambian los puntos (mucho más fluido al arrastrar)
@@ -1151,10 +1661,10 @@
     var group = L.layerGroup();
     if(kind === 'poly'){
       previewHalo = L.polygon(drawPoints, { color:'#fff', weight:7, opacity:1, fill:false }).addTo(group);
-      previewLine = L.polygon(drawPoints, { color:color, weight:4, fillColor:color, fillOpacity:0.2 }).addTo(group);
+      previewLine = L.polygon(drawPoints, { color:color, weight:4, fillColor:color, fillOpacity: drawCerco ? 0.06 : 0.2, dashArray:dash }).addTo(group);
     } else {
       previewHalo = L.polyline(drawPoints, { color:'#fff', weight:7, opacity:1 }).addTo(group);
-      previewLine = L.polyline(drawPoints, { color:color, weight:4 }).addTo(group);
+      previewLine = L.polyline(drawPoints, { color:color, weight:4, dashArray:dash }).addTo(group);
     }
     group.addTo(map);
     tempPreviewLayer = group;
@@ -1183,6 +1693,7 @@
     }
     drawPoints = [];
     mode = null;
+    drawCerco = null;
     document.getElementById('toolbarDefault').style.display = 'flex';
     document.getElementById('toolbarDrawing').classList.remove('show');
     document.getElementById('drawToast').classList.remove('show');
@@ -1244,7 +1755,7 @@
     }
     if(gpsFollowMode) map.panTo(latlng, { animate:true });
 
-    if(typeof pos.coords.accuracy !== 'number' || pos.coords.accuracy > GPS_MAX_ACCURACY) return;
+    if(typeof pos.coords.accuracy !== 'number' || pos.coords.accuracy > (drawCerco ? GPS_MAX_ACCURACY_CERCO : GPS_MAX_ACCURACY)) return;
 
     if(lastGpsPoint){
       var jump = latlng.distanceTo(lastGpsPoint);
@@ -1269,21 +1780,27 @@
   }
 
   function suggestName(type){
-    var count = shapes.filter(function(s){ return s.type===type; }).length;
+    if(drawCerco){
+      var kind = drawCerco.kind;
+      var nc = shapes.filter(function(s){ return isCerco(s) && s.cerco.kind === kind; }).length;
+      return (CERCO_KIND_LABEL[kind] || 'Cerco') + ' ' + (nc + 1);
+    }
+    var count = shapes.filter(function(s){ return s.type===type && !isCerco(s); }).length;
     return TYPE_INFO[type].label + ' ' + (count+1);
   }
 
   function finishDrawing(){
-    var info = TYPE_INFO[mode];
+    var info = curInfo();
     if(drawPoints.length < info.minPoints) return;
     pendingArea = info.isPolygon ? computeAreaHa(drawPoints) : null;
     var input = document.getElementById('nameInput');
     var existing = editingId ? shapes.filter(function(s){ return s.id === editingId; })[0] : null;
+    var fem = !drawCerco && mode !== 'campo';
     if(editingId){
       document.getElementById('nameModalTitle').textContent = 'Editar ' + info.label;
       input.value = existing ? existing.name : suggestName(mode);
     } else {
-      document.getElementById('nameModalTitle').textContent = 'Nueva ' + info.label;
+      document.getElementById('nameModalTitle').textContent = (fem ? 'Nueva ' : 'Nuevo ') + info.label;
       input.value = suggestName(mode);
     }
     document.getElementById('notesInput').value = existing && existing.notes ? existing.notes : '';
@@ -1292,14 +1809,22 @@
     pendingStatus = existing && existing.status ? existing.status : null;
     originalStatus = pendingStatus;
     var statusField = document.getElementById('statusField');
-    if(info.isPolygon){
+    if(info.isPolygon && !drawCerco){
       statusField.style.display = 'block';
       updateStatusButtonsUI(info.color);
     } else {
       statusField.style.display = 'none';
     }
     var areaLine = document.getElementById('areaLine');
-    if(pendingArea !== null){
+    if(drawCerco){
+      var res = null;
+      try{ res = cercoMaterials(drawPoints.map(function(ll){ return [ll.lat, ll.lng]; }), drawCerco); }catch(e){}
+      var lenM = res ? res.geo.lengthM : computeLengthM(drawPoints);
+      document.getElementById('areaLabel').textContent = drawCerco.closed ? 'Perímetro:' : 'Largo:';
+      document.getElementById('areaValue').textContent = fmtN(lenM) + ' m' + (pendingArea !== null ? ' · ' + fmtHa(pendingArea) : '');
+      areaLine.style.display = 'flex';
+    } else if(pendingArea !== null){
+      document.getElementById('areaLabel').textContent = 'Área calculada:';
       areaLine.style.display = 'flex';
       document.getElementById('areaValue').textContent = fmtHa(pendingArea);
     } else {
@@ -1321,7 +1846,7 @@
 
   function toggleStatus(value){
     pendingStatus = (pendingStatus === value) ? null : value;
-    updateStatusButtonsUI(TYPE_INFO[mode].color);
+    updateStatusButtonsUI(curInfo().color);
   }
 
   function updateColorPickerUI(){
@@ -1348,9 +1873,12 @@
   }
 
   function confirmSaveShape(){
+    var wasCerco = !!drawCerco, savedId = null;
     var name = document.getElementById('nameInput').value.trim() || suggestName(mode);
     var notes = document.getElementById('notesInput').value.trim();
-    var points = drawPoints.map(function(ll){ return [ll.lat, ll.lng]; });
+    var points = drawPoints.map(function(ll){
+      return drawCerco ? [Math.round(ll.lat * 1e7) / 1e7, Math.round(ll.lng * 1e7) / 1e7] : [ll.lat, ll.lng];
+    });
     var statusDate = null;
     if(pendingStatus){
       statusDate = (editingId && originalStatus === pendingStatus) ?
@@ -1367,8 +1895,10 @@
         shapes[idx].status = pendingStatus;
         shapes[idx].statusDate = statusDate;
         shapes[idx].color = pendingColor;
+        if(drawCerco) shapes[idx].cerco = cercoClone(drawCerco); else delete shapes[idx].cerco;
         renderShapeOnMap(shapes[idx]);
       }
+      savedId = shapes[idx] ? shapes[idx].id : null;
       editingId = null;
     } else {
       var shape = {
@@ -1382,13 +1912,16 @@
         statusDate: statusDate,
         color: pendingColor
       };
+      if(drawCerco) shape.cerco = cercoClone(drawCerco);
       shapes.push(shape);
+      savedId = shape.id;
       renderShapeOnMap(shape);
     }
     saveShapes();
     updateListBadge();
     document.getElementById('nameBackdrop').classList.remove('show');
     cancelDrawing();
+    if(wasCerco && savedId) openMaterials(savedId);     // al guardar un cerco se muestran enseguida los materiales
   }
 
   // ---------- list modal ----------
@@ -1420,8 +1953,14 @@
   }
   function shapeSearchText(s){
     var statusLabel = s.status === 'ocupado' ? 'ocupado' : (s.status === 'descansando' ? 'descansando' : '');
-    var typeLabel = TYPE_INFO[s.type] ? TYPE_INFO[s.type].label : '';
-    return normText([s.name, s.notes, statusLabel, typeLabel].join(' '));
+    var info = infoOf(s);
+    var typeLabel = info ? info.label : '';
+    var cercoTxt = '';
+    if(isCerco(s)){
+      var cf = cercoFull(s.cerco);
+      cercoTxt = CERCO_KIND_LABEL[cf.kind] + ' ' + (cf.closed ? 'perimetro cerrado' : 'abierta') + (cf.kind === 'alambrado' ? ' alambre' : ' electrico boyero');
+    }
+    return normText([s.name, s.notes, statusLabel, typeLabel, cercoTxt].join(' '));
   }
   // Pone el texto en el elemento resaltando (con <mark>) las palabras buscadas
   function setHighlighted(el, text, words){
@@ -1471,7 +2010,7 @@
 
     if(!shapes.length){
       summary.textContent = 'Todavía no hay nada marcado.';
-      scroll.innerHTML = '<div class="empty-state">Tocá <b>Campo</b>, <b>Parcela</b> o <b>Línea</b> abajo para empezar a marcar en el mapa.</div>';
+      scroll.innerHTML = '<div class="empty-state">Tocá <b>Campo</b>, <b>Parcela</b>, <b>Línea</b> o <b>Cerco</b> abajo para empezar a marcar en el mapa.</div>';
       return;
     }
 
@@ -1480,24 +2019,27 @@
       return words.every(function(w){ return hay.indexOf(w) !== -1; });
     }) : shapes;
 
+    var counts = { campo:0, parcela:0, linea:0, cerco:0 };
+    var parcelaHaTotal = 0;
+    (query ? visible : shapes).forEach(function(s){
+      var g = groupOf(s);
+      if(counts[g] === undefined) g = 'linea';
+      counts[g]++;
+      if(!query && g === 'parcela' && s.areaHa) parcelaHaTotal += s.areaHa;
+    });
+    function plural(n, one, many){ return n + ' ' + (n !== 1 ? many : one); }
     if(query){
-      var vc = { campo:0, parcela:0, linea:0 };
-      visible.forEach(function(s){ vc[s.type]++; });
       summary.textContent = visible.length + ' resultado' + (visible.length!==1?'s':'') + ' para "' + rawQuery + '"' +
-        '  ·  ' + vc.campo + ' campo' + (vc.campo!==1?'s':'') +
-        '  ·  ' + vc.parcela + ' parcela' + (vc.parcela!==1?'s':'') +
-        '  ·  ' + vc.linea + ' línea' + (vc.linea!==1?'s':'');
+        '  ·  ' + plural(counts.campo, 'campo', 'campos') +
+        '  ·  ' + plural(counts.parcela, 'parcela', 'parcelas') +
+        '  ·  ' + plural(counts.linea, 'línea', 'líneas') +
+        '  ·  ' + plural(counts.cerco, 'cerco', 'cercos');
     } else {
-      var counts = { campo:0, parcela:0, linea:0 };
-      var parcelaHaTotal = 0;
-      shapes.forEach(function(s){
-        counts[s.type]++;
-        if(s.type==='parcela' && s.areaHa) parcelaHaTotal += s.areaHa;
-      });
-      summary.textContent = counts.campo + ' campo' + (counts.campo!==1?'s':'') +
-        ' · ' + counts.parcela + ' parcela' + (counts.parcela!==1?'s':'') +
+      summary.textContent = plural(counts.campo, 'campo', 'campos') +
+        ' · ' + plural(counts.parcela, 'parcela', 'parcelas') +
         (counts.parcela ? ' (' + fmtHa(parcelaHaTotal) + ')' : '') +
-        ' · ' + counts.linea + ' línea' + (counts.linea!==1?'s':'');
+        ' · ' + plural(counts.linea, 'línea', 'líneas') +
+        ' · ' + plural(counts.cerco, 'cerco', 'cercos');
     }
 
     if(query && !visible.length){
@@ -1505,22 +2047,29 @@
       return;
     }
 
-    var EMPTY_TEXT = { campo:'Ninguno todavía', parcela:'Ninguna todavía', linea:'Ninguna todavía' };
-    ['campo','parcela','linea'].forEach(function(type){
-      var info = TYPE_INFO[type];
-      var group = visible.filter(function(s){ return s.type===type; });
+    var EMPTY_TEXT = { campo:'Ninguno todavía', parcela:'Ninguna todavía', linea:'Ninguna todavía', cerco:'Ninguno todavía' };
+    GROUPS.forEach(function(g){
+      var info = g === 'cerco' ? CERCO_INFO : TYPE_INFO[g];
+      var group = visible.filter(function(s){ return groupOf(s) === g; });
       var titleEl = document.createElement('div');
       titleEl.className = 'group-title';
       titleEl.style.setProperty('--gcolor', info.color);
       var nameEl = document.createElement('span');
       nameEl.className = 'gname';
-      nameEl.textContent = info.label + 's';
+      nameEl.textContent = GROUP_TITLE[g];
       var countEl = document.createElement('span');
       countEl.className = 'gcount';
       countEl.textContent = group.length;
       titleEl.appendChild(nameEl);
       titleEl.appendChild(countEl);
-      if(info.isPolygon && group.length){
+      if(g === 'cerco' && group.length){
+        var m = 0;
+        group.forEach(function(s){ m += cercoLenOf(s); });
+        var mEl = document.createElement('span');
+        mEl.className = 'gha';
+        mEl.textContent = fmtN(m) + ' m';
+        titleEl.appendChild(mEl);
+      } else if(info.isPolygon && group.length){
         var ha = 0;
         group.forEach(function(s){ if(s.areaHa) ha += s.areaHa; });
         var haEl = document.createElement('span');
@@ -1532,7 +2081,7 @@
       if(!group.length){
         var emptyEl = document.createElement('div');
         emptyEl.className = 'group-empty';
-        emptyEl.textContent = query ? 'Sin coincidencias' : EMPTY_TEXT[type];
+        emptyEl.textContent = query ? 'Sin coincidencias' : EMPTY_TEXT[g];
         scroll.appendChild(emptyEl);
         return;
       }
@@ -1543,31 +2092,45 @@
   }
 
   function buildRow(s, words){
-    var info = TYPE_INFO[s.type];
+    var cer = isCerco(s);
+    var info = infoOf(s);
     var row = document.createElement('div');
     row.className = 'row-item';
     var areaText = s.areaHa!=null ? fmtHa(s.areaHa) : '—';
     var statusText = '';
-    if(s.status){
+    if(cer){
+      areaText = cercoShortDesc(s);
+    } else if(s.status){
       var label = s.status === 'ocupado' ? 'Ocupado' : 'Descansando';
       var dateText = s.statusDate ? ' desde ' + new Date(s.statusDate).toLocaleDateString('es-AR') : '';
       statusText = ' · ' + statusEmoji(s.status) + label + dateText;
     }
     row.innerHTML =
       '<div class="dot" style="background:'+(s.color || info.color)+'"></div>' +
-      '<div class="info"><div class="name"></div><div class="area">'+areaText+statusText+'</div>' +
+      '<div class="info"><div class="name"></div><div class="area"></div>' +
+        (cer ? '<div class="cerco-sum"></div>' : '') +
         (s.notes ? '<div class="notes"></div>' : '') +
       '</div>' +
       '<div class="row-actions">' +
+        (cer ? '<button class="mat" aria-label="Materiales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></button>' : '') +
         '<button class="go" aria-label="Ir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22"/></svg></button>' +
         '<button class="edit" aria-label="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>' +
         '<button class="del" aria-label="Borrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7H20M9 7V4H15V7M6 7L7 20H17L18 7"/></svg></button>' +
       '</div>';
+    row.querySelector('.area').textContent = areaText + statusText;
     setHighlighted(row.querySelector('.name'), s.name, words);
     if(s.notes) setHighlighted(row.querySelector('.notes'), s.notes, words);
-    row.querySelector('.go').addEventListener('click', function(){ flyToShape(s.id); closeListModal(); });
+    if(cer){
+      var res = cercoResFor(s);
+      row.querySelector('.cerco-sum').textContent = res ? res.short : '';
+      row.querySelector('.mat').addEventListener('click', function(){ openMaterials(s.id); });
+    }
+    row.querySelector('.go').addEventListener('click', function(){ flyToShape(s.id); closeListModal(); closeCercoSheet(); });
     row.querySelector('.edit').addEventListener('click', function(){ startEditShape(s.id); });
-    row.querySelector('.del').addEventListener('click', function(){ deleteShape(s.id); });
+    row.querySelector('.del').addEventListener('click', function(){
+      deleteShape(s.id);
+      if(document.getElementById('cercoBackdrop').classList.contains('show')) renderCercoSheet();
+    });
     return row;
   }
 
@@ -1612,6 +2175,7 @@
     renderShapeOnMap(lastDeleted);
     updateListBadge();
     renderListContent();
+    if(document.getElementById('cercoBackdrop').classList.contains('show')) renderCercoSheet();
     document.getElementById('undoToast').classList.remove('show');
     if(undoTimeoutId) clearTimeout(undoTimeoutId);
     lastDeleted = null;
@@ -1621,16 +2185,21 @@
   function exportData(){
     if(!shapes.length){ alert('Todavía no hay nada para exportar.'); return; }
     var lines = ['Mapa de Parcelas — ' + new Date().toLocaleDateString('es-AR'), ''];
-    ['campo','parcela','linea'].forEach(function(type){
-      var group = shapes.filter(function(s){ return s.type===type; });
+    GROUPS.forEach(function(g){
+      var group = shapes.filter(function(s){ return groupOf(s) === g; });
       if(!group.length) return;
-      lines.push(TYPE_INFO[type].label + 's:');
+      lines.push(GROUP_TITLE[g] + ':');
       group.forEach(function(s){
-        lines.push('- ' + s.name + (s.areaHa!=null ? ' — ' + fmtHa(s.areaHa) : ''));
+        if(isCerco(s)){
+          var r = cercoResFor(s);
+          lines.push('- ' + s.name + ' — ' + cercoShortDesc(s) + (r ? ' (' + r.short + ')' : ''));
+        } else {
+          lines.push('- ' + s.name + (s.areaHa!=null ? ' — ' + fmtHa(s.areaHa) : ''));
+        }
       });
       lines.push('');
     });
-    var parcelaHaTotal = shapes.filter(function(s){return s.type==='parcela';})
+    var parcelaHaTotal = shapes.filter(function(s){return s.type==='parcela' && !isCerco(s);})
       .reduce(function(a,s){return a + (s.areaHa||0);},0);
     if(parcelaHaTotal) lines.push('Total parcelas: ' + fmtHa(parcelaHaTotal));
     var text = lines.join('\n');
@@ -1684,21 +2253,22 @@
   function renderKmlList(){
     var scroll = document.getElementById('kmlListScroll');
     scroll.innerHTML = '';
-    ['campo','parcela','linea'].forEach(function(type){
-      var group = shapes.filter(function(s){ return s.type===type; });
+    GROUPS.forEach(function(g){
+      var group = shapes.filter(function(s){ return groupOf(s) === g; });
       if(!group.length) return;
       var titleEl = document.createElement('div');
       titleEl.className = 'group-title';
-      titleEl.textContent = TYPE_INFO[type].label + 's';
+      titleEl.textContent = GROUP_TITLE[g];
       scroll.appendChild(titleEl);
       group.forEach(function(s){
         var row = document.createElement('label');
         row.className = 'row-item';
         row.style.cursor = 'pointer';
         row.innerHTML =
-          '<input type="checkbox" class="kml-check" style="width:20px;height:20px;flex-shrink:0;accent-color:'+TYPE_INFO[s.type].color+';">' +
-          '<div class="info"><div class="name"></div><div class="area">'+(s.areaHa!=null?fmtHa(s.areaHa):'—')+'</div></div>';
+          '<input type="checkbox" class="kml-check" style="width:20px;height:20px;flex-shrink:0;accent-color:'+infoOf(s).color+';">' +
+          '<div class="info"><div class="name"></div><div class="area"></div></div>';
         row.querySelector('.name').textContent = s.name;
+        row.querySelector('.area').textContent = isCerco(s) ? cercoShortDesc(s) : (s.areaHa!=null?fmtHa(s.areaHa):'—');
         var check = row.querySelector('.kml-check');
         check.checked = !!kmlSelected[s.id];
         check.addEventListener('change', function(){
@@ -1726,24 +2296,29 @@
     if(!list.length){ alert('Todavía no hay nada para exportar.'); return; }
     var kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n<name>Mapa de Parcelas</name>\n';
     list.forEach(function(s){
-      var info = TYPE_INFO[s.type];
+      var info = infoOf(s);
       var lineColor = toKmlColor(s.color || info.color);
       kml += '<Style id="style_'+s.id+'"><LineStyle><color>'+lineColor+'</color><width>3</width></LineStyle>';
-      if(info.isPolygon) kml += '<PolyStyle><color>4d'+lineColor.substring(2)+'</color></PolyStyle>';
+      if(info.isPolygon && !isCerco(s)) kml += '<PolyStyle><color>4d'+lineColor.substring(2)+'</color></PolyStyle>';
       kml += '</Style>\n';
     });
     list.forEach(function(s){
-      var info = TYPE_INFO[s.type];
+      var info = infoOf(s);
+      var cer = isCerco(s);
       var coords = s.points.map(function(p){ return p[1]+','+p[0]+',0'; });
-      if(info.isPolygon) coords.push(coords[0]);
+      if((info.isPolygon && !cer) || (cer && s.cerco.closed && coords.length > 2)) coords.push(coords[0]);
       var desc = [];
-      if(s.areaHa != null) desc.push('Área: ' + fmtHa(s.areaHa));
+      if(cer){
+        desc.push(cercoShortDesc(s));
+        var kr = cercoResFor(s);
+        if(kr) desc.push('Materiales: ' + kr.items.map(function(it){ return it.label + ' ' + fmtN(it.qty) + (it.unit || ''); }).join(', '));
+      } else if(s.areaHa != null) desc.push('Área: ' + fmtHa(s.areaHa));
       if(s.status) desc.push('Estado: ' + (s.status==='ocupado'?'Ocupado':'Descansando') + (s.statusDate ? ' desde ' + new Date(s.statusDate).toLocaleDateString('es-AR') : ''));
       if(s.notes) desc.push('Notas: ' + s.notes);
       kml += '<Placemark><name>'+kmlEscape(s.name)+'</name>';
       if(desc.length) kml += '<description>'+kmlEscape(desc.join(' | '))+'</description>';
       kml += '<styleUrl>#style_'+s.id+'</styleUrl>';
-      kml += info.isPolygon ?
+      kml += (info.isPolygon && !cer) ?
         '<Polygon><outerBoundaryIs><LinearRing><coordinates>'+coords.join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon>' :
         '<LineString><coordinates>'+coords.join(' ')+'</coordinates></LineString>';
       kml += '</Placemark>\n';
@@ -1773,6 +2348,9 @@
           return s && s.id && s.type && TYPE_INFO[s.type] && typeof s.name === 'string' && Array.isArray(s.points);
         });
         if(!valid) throw new Error('formato inválido');
+        data.forEach(function(s){                       // un cerco con datos dañados vuelve a ser una línea común
+          if(s.cerco !== undefined && (!s.cerco || typeof s.cerco !== 'object' || !CERCO_KIND_LABEL[s.cerco.kind])) delete s.cerco;
+        });
         if(!confirm('Esto va a REEMPLAZAR todo lo que tenés guardado ahora por el contenido del archivo (' + data.length + ' elementos). ¿Continuar?')) return;
         shapes = data;
         saveShapes();
@@ -1868,6 +2446,455 @@
     updateSyncMenuLabel();
   }
 
+  // ======================================================================
+  //  CERCO: pantallas (configuración, medición y materiales)
+  // ======================================================================
+  var CERCO_FIELDS = {
+    alambrado: [
+      { key:'espPoste', label:'Metros entre postes', unit:'m', min:1 },
+      { key:'espPique', label:'Metros entre piques', unit:'m', min:1 },
+      { key:'hilos', label:'Hilos de alambre', int:true, min:1 },
+      { key:'postesPorArranque', label:'Postes por arranque', int:true, min:0 },
+      { key:'postesPorRienda', label:'Postes por palo con rienda', int:true, min:0 },
+      { key:'mRollo', label:'Metros por rollo', sub:'opcional: sirve para contar los rollos', unit:'m', min:1, ph:'—' }
+    ],
+    electrico: [
+      { key:'hilos', label:'Líneas de hilo', int:true, min:1 },
+      { key:'espEstaca', label:'Metros entre estacas', unit:'m', min:1 },
+      { key:'mRollo', label:'Metros por rollo', sub:'opcional: sirve para contar los rollos', unit:'m', min:1, ph:'—' }
+    ]
+  };
+  var CERCO_COUNT_FIELDS = {
+    alambrado: [
+      { key:'arranques', label:'Arranques', int:true, min:0 },
+      { key:'rienda', label:'Palos con rienda', int:true, min:0 }
+    ],
+    electrico: [
+      { key:'postes', label:'Postes', sub:'los que vas a poner', int:true, min:0, ph:'0' }
+    ]
+  };
+
+  function isCerco(s){ return !!(s && s.cerco && typeof s.cerco === 'object'); }
+  function infoOf(s){ return isCerco(s) ? CERCO_INFO : TYPE_INFO[s.type]; }
+  function groupOf(s){ return isCerco(s) ? 'cerco' : s.type; }
+  function getShape(id){ return shapes.filter(function(s){ return s.id === id; })[0] || null; }
+  // Tipo de lo que se está dibujando ahora (un cerco tiene su propio color y mínimo de puntos)
+  function curInfo(){
+    if(drawCerco){
+      return { label: CERCO_KIND_LABEL[drawCerco.kind] || 'Cerco', color:CERCO_COLOR, isPolygon: !!drawCerco.closed, minPoints: drawCerco.closed ? 3 : 2 };
+    }
+    return TYPE_INFO[mode];
+  }
+
+  function cercoResFor(s){
+    try{ return cercoMaterials(s.points, s.cerco); }catch(e){ return null; }
+  }
+  function cercoLenOf(s){
+    var r = cercoResFor(s);
+    if(r) return r.geo.lengthM;
+    return computeLengthM(s.points.map(function(p){ return L.latLng(p[0], p[1]); }));
+  }
+  function cercoShortDesc(s){
+    var cf = cercoFull(s.cerco);
+    var len = fmtN(cercoLenOf(s)) + ' m';
+    return CERCO_KIND_LABEL[cf.kind] + ' · ' + (cf.closed ? 'perímetro ' : '') + len +
+      (cf.closed && s.areaHa != null ? ' · ' + fmtHa(s.areaHa) : '');
+  }
+
+  // ---- preferencias (los últimos valores que usaste, por tipo de cerco) ----
+  function loadCercoPrefs(){
+    try{
+      var r = localStorage.getItem(CERCO_PREFS_KEY);
+      var o = r ? JSON.parse(r) : null;
+      return (o && typeof o === 'object') ? o : {};
+    }catch(e){ return {}; }
+  }
+  function saveCercoPrefs(cfg){
+    var prefs = loadCercoPrefs();
+    prefs.kind = cfg.kind;
+    prefs.closed = !!cfg.closed;
+    prefs[cfg.kind] = { p: cfg.p, fin: cfg.fin };
+    try{ localStorage.setItem(CERCO_PREFS_KEY, JSON.stringify(prefs)); }catch(e){}
+  }
+  function cercoFromPrefs(kind, closed){
+    var prefs = loadCercoPrefs();
+    var c = cercoDefaults(kind);
+    var saved = prefs[kind];
+    if(saved && typeof saved === 'object' && saved.p){
+      var tmp = cercoFull({ kind:kind, p:saved.p, fin:saved.fin });
+      c.p = tmp.p; c.fin = tmp.fin;
+    }
+    c.closed = !!closed;
+    return c;
+  }
+
+  // ---- piezas de formulario ----
+  function makeSeg(options, current, cb){
+    var wrap = document.createElement('div');
+    wrap.className = 'seg';
+    options.forEach(function(o){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = o.t;
+      if(o.v === current) b.className = 'selected';
+      b.addEventListener('click', function(){
+        if(b.classList.contains('selected')) return;
+        var r = cb(o.v);
+        if(r === false) return;
+        var prev = wrap.querySelector('.selected');
+        if(prev) prev.classList.remove('selected');
+        b.classList.add('selected');
+      });
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  function cercoFieldText(v){ return (v === null || v === undefined) ? '' : String(v).replace('.', ','); }
+  function parseCercoNum(str, f){
+    var t = String(str == null ? '' : str).trim().replace(',', '.');
+    if(t === '') return null;
+    var n = Number(t);
+    if(!isFinite(n)) return null;
+    if(f.int) n = Math.round(n);
+    if(n < f.min) return null;
+    if(n > 100000) n = 100000;
+    return n;
+  }
+
+  // Lista de datos editable. opts.counts: incluye cantidades (arranques, palos con rienda, postes); opts.onChange: avisa cada cambio
+  function buildCercoForm(host, cfg, opts){
+    host.innerHTML = '';
+    var idp = (opts && opts.idPrefix) || 'cf-';      // prefijo propio de cada pantalla: dos formularios no pueden repetir ids
+    function addRow(f, scope){
+      var row = document.createElement('div');
+      row.className = 'cf-row';
+      var lab = document.createElement('label');
+      lab.htmlFor = idp + f.key;
+      lab.appendChild(document.createTextNode(f.label));
+      if(f.sub){
+        var sub = document.createElement('span');
+        sub.className = 'cf-sub';
+        sub.textContent = f.sub;
+        lab.appendChild(sub);
+      }
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = idp + f.key;
+      inp.setAttribute('inputmode', f.int ? 'numeric' : 'decimal');
+      inp.setAttribute('autocomplete', 'off');
+      inp.setAttribute('autocorrect', 'off');
+      if(f.ph) inp.placeholder = f.ph;
+      function cur(){ return scope === 'c' ? cfg[f.key] : cfg.p[f.key]; }
+      inp.value = cercoFieldText(cur());
+      inp.addEventListener('input', function(){
+        var v = parseCercoNum(inp.value, f);
+        if(scope === 'c') cfg[f.key] = v; else cfg.p[f.key] = v;
+        if(opts && opts.onChange) opts.onChange();
+      });
+      inp.addEventListener('blur', function(){ inp.value = cercoFieldText(cur()); });
+      var unit = document.createElement('span');
+      unit.className = 'cf-unit';
+      unit.textContent = f.unit || '';
+      row.appendChild(lab); row.appendChild(inp); row.appendChild(unit);
+      host.appendChild(row);
+    }
+    (CERCO_FIELDS[cfg.kind] || []).forEach(function(f){ addRow(f, 'p'); });
+
+    var t, hint;
+    if(cfg.kind === 'alambrado'){
+      t = document.createElement('div');
+      t.className = 'cf-title';
+      t.textContent = 'En esquinas y extremos poner';
+      host.appendChild(t);
+      host.appendChild(makeSeg([{ v:'arranque', t:'Arranque' }, { v:'rienda', t:'Palo con rienda' }], cfg.fin, function(v){
+        cfg.fin = v;
+        if(opts && opts.onChange) opts.onChange();
+      }));
+    } else {
+      hint = document.createElement('p');
+      hint.className = 'cf-hint';
+      hint.textContent = 'En las esquinas y extremos del eléctrico no se agrega nada especial.';
+      host.appendChild(hint);
+    }
+
+    if(opts && opts.counts){
+      t = document.createElement('div');
+      t.className = 'cf-title';
+      t.textContent = 'Cantidades (vacío = se calcula solo)';
+      host.appendChild(t);
+      (CERCO_COUNT_FIELDS[cfg.kind] || []).forEach(function(f){ addRow(f, 'c'); });
+    }
+  }
+
+  // ---- hoja "Cerco": Nuevo / Guardados ----
+  function openCercoSheet(tab){
+    if(!cercoSetup){
+      var prefs = loadCercoPrefs();
+      cercoSetup = cercoFromPrefs(prefs.kind === 'electrico' ? 'electrico' : 'alambrado', !!prefs.closed);
+    }
+    cercoTab = tab || 'nuevo';
+    renderCercoSheet();
+    document.getElementById('cercoBackdrop').classList.add('show');
+  }
+  function closeCercoSheet(){
+    document.getElementById('cercoBackdrop').classList.remove('show');
+  }
+  function renderCercoSheet(){
+    var nCer = shapes.filter(isCerco).length;
+    var tabNew = document.getElementById('cercoTabNew'), tabSaved = document.getElementById('cercoTabSaved');
+    tabSaved.textContent = 'Guardados' + (nCer ? ' (' + nCer + ')' : '');
+    tabNew.classList.toggle('selected', cercoTab === 'nuevo');
+    tabSaved.classList.toggle('selected', cercoTab !== 'nuevo');
+    document.getElementById('cercoFooter').style.display = cercoTab === 'nuevo' ? 'block' : 'none';
+    var body = document.getElementById('cercoBody');
+    if(cercoTab === 'nuevo') renderCercoNew(body); else renderCercoSaved(body);
+  }
+  function renderCercoNew(host){
+    host.innerHTML = '';
+    host.scrollTop = 0;
+    host.appendChild(makeSeg([{ v:'alambrado', t:'Alambrado' }, { v:'electrico', t:'Eléctrico' }], cercoSetup.kind, function(k){
+      saveCercoPrefs(cercoSetup);
+      cercoSetup = cercoFromPrefs(k, cercoSetup.closed);
+      renderCercoNew(host);
+    }));
+    host.appendChild(makeSeg([{ v:'abierta', t:'Línea abierta' }, { v:'cerrada', t:'Perímetro cerrado' }], cercoSetup.closed ? 'cerrada' : 'abierta', function(v){
+      cercoSetup.closed = (v === 'cerrada');
+    }));
+    var formHost = document.createElement('div');
+    host.appendChild(formHost);
+    buildCercoForm(formHost, cercoSetup, { counts:false, idPrefix:'cfs-' });
+    var hint = document.createElement('p');
+    hint.className = 'cf-hint';
+    hint.textContent = cercoSetup.kind === 'alambrado' ?
+      'Después medís caminando con el GPS o tocando el mapa. Al terminar ves la lista de materiales; los arranques o palos con rienda se cuentan solos por las esquinas y ahí mismo los podés corregir.' :
+      'Después medís caminando con el GPS o tocando el mapa. Al terminar ves la lista de materiales y ahí cargás cuántos postes lleva.';
+    host.appendChild(hint);
+  }
+  function renderCercoSaved(host){
+    host.innerHTML = '';
+    host.scrollTop = 0;
+    var list = shapes.filter(isCerco);
+    if(!list.length){
+      host.innerHTML = '<div class="empty-state">Todavía no mediste ningún cerco.<br>En la pestaña <b>Nuevo</b> elegís el tipo y lo medís.</div>';
+      return;
+    }
+    var total = 0;
+    list.forEach(function(s){ total += cercoLenOf(s); });
+    var sum = document.createElement('div');
+    sum.className = 'summary-line';
+    sum.textContent = list.length + ' cerco' + (list.length !== 1 ? 's' : '') + ' · ' + fmtN(total) + ' m en total';
+    host.appendChild(sum);
+    list.forEach(function(s){ host.appendChild(buildRow(s, null)); });
+  }
+  function cercoMeasureNow(){
+    saveCercoPrefs(cercoSetup);
+    closeCercoSheet();
+    startCercoDrawing(cercoSetup);
+  }
+
+  // ---- medir ----
+  function startCercoDrawing(cfg){
+    mode = 'linea';
+    drawCerco = cercoClone(cfg);
+    editingId = null;
+    drawPoints = [];
+    clearTempLayers();
+    setupDrawingUI('linea', cercoDrawTitle());
+    updateDrawUI();
+  }
+  function cercoDrawTitle(prefix){
+    var k = CERCO_KIND_LABEL[drawCerco.kind] || 'Cerco';
+    return (prefix ? prefix + ' ' : '') + k + (drawCerco.closed ? ' · perímetro cerrado' : ' · línea abierta');
+  }
+  // Texto en vivo mientras se mide: largo y materiales
+  function cercoDrawMeasure(){
+    var n = drawPoints.length, closed = !!drawCerco.closed;
+    if(n < 2) return '';
+    var pts = drawPoints.map(function(ll){ return [ll.lat, ll.lng]; });
+    var txt = '';
+    try{
+      var res = cercoMaterials(pts, drawCerco);
+      var ring = closed && n >= 3;
+      txt = (ring ? 'perímetro ' : 'largo ') + fmtN(res.geo.lengthM) + ' m';
+      if(ring) txt += ' · ' + fmtHa(computeAreaHa(drawPoints));
+      if(n <= 1500) txt += ' · ' + res.short;
+    }catch(e){
+      txt = 'largo ' + fmtN(computeLengthM(drawPoints)) + ' m';
+    }
+    return txt;
+  }
+
+  // ---- materiales ----
+  function openMaterials(id){
+    var s = getShape(id);
+    if(!s || !isCerco(s)) return;
+    matShapeId = id;
+    matCfg = cercoFull(s.cerco);
+    document.getElementById('matTitle').textContent = s.name;
+    buildMatControls();
+    refreshMaterials();
+    document.getElementById('matBackdrop').classList.add('show');
+    document.getElementById('matScroll').scrollTop = 0;
+  }
+  function closeMaterials(){
+    flushMatSave();
+    document.getElementById('matBackdrop').classList.remove('show');
+    matShapeId = null;
+    matCfg = null;
+    if(document.getElementById('listBackdrop').classList.contains('show')) renderListContent();
+    if(document.getElementById('cercoBackdrop').classList.contains('show')) renderCercoSheet();
+  }
+  function buildMatControls(){
+    var host = document.getElementById('matForm');
+    host.innerHTML = '';
+    host.appendChild(makeSeg([{ v:'alambrado', t:'Alambrado' }, { v:'electrico', t:'Eléctrico' }], matCfg.kind, matSetKind));
+    host.appendChild(makeSeg([{ v:'abierta', t:'Línea abierta' }, { v:'cerrada', t:'Perímetro cerrado' }], matCfg.closed ? 'cerrada' : 'abierta', function(v){
+      return matSetClosed(v === 'cerrada');
+    }));
+    var formHost = document.createElement('div');
+    host.appendChild(formHost);
+    buildCercoForm(formHost, matCfg, { counts:true, onChange: matChanged, idPrefix:'cfm-' });
+  }
+  function matSetKind(k){
+    var s = getShape(matShapeId);
+    if(!s) return false;
+    matCfg = cercoFromPrefs(k, matCfg.closed);
+    s.cerco = matCfg;
+    rerenderShape(s);
+    buildMatControls();
+    refreshMaterials();
+    scheduleMatSave();
+    return true;
+  }
+  function matSetClosed(closed){
+    var s = getShape(matShapeId);
+    if(!s) return false;
+    if(closed && s.points.length < 3){
+      alert('Para cerrar el perímetro hacen falta al menos 3 puntos.');
+      return false;
+    }
+    matCfg.closed = closed;
+    s.areaHa = closed ? computeAreaHa(s.points.map(function(p){ return L.latLng(p[0], p[1]); })) : null;
+    s.cerco = matCfg;
+    rerenderShape(s);
+    refreshMaterials();
+    scheduleMatSave();
+    return true;
+  }
+  function matChanged(){
+    refreshMaterials();
+    scheduleMatSave();
+  }
+  function scheduleMatSave(){
+    var s = getShape(matShapeId);
+    if(!s) return;
+    s.cerco = matCfg;
+    if(matSaveTimer) clearTimeout(matSaveTimer);
+    matSaveTimer = setTimeout(flushMatSave, 500);
+  }
+  function flushMatSave(){
+    if(!matSaveTimer) return;
+    clearTimeout(matSaveTimer);
+    matSaveTimer = null;
+    saveShapes();
+  }
+  function rerenderShape(s){
+    var layer = layerById[s.id];
+    if(layer) drawnLayerGroup.removeLayer(layer);
+    var label = labelMarkerById[s.id];
+    if(label) drawnLayerGroup.removeLayer(label);
+    renderShapeOnMap(s);
+  }
+  function refreshMaterials(){
+    var s = getShape(matShapeId);
+    if(!s || !matCfg){ document.getElementById('matBackdrop').classList.remove('show'); return; }
+    var res = cercoMaterials(s.points, matCfg);
+    var parts = [CERCO_KIND_LABEL[matCfg.kind], matCfg.closed ? 'perímetro cerrado' : 'línea abierta', fmtN(res.geo.lengthM) + ' m'];
+    if(matCfg.closed && s.areaHa != null) parts.push(fmtHa(s.areaHa));
+    document.getElementById('matMeta').textContent = parts.join(' · ');
+    document.getElementById('matShort').textContent = res.short;
+    var host = document.getElementById('matItems');
+    host.innerHTML = '';
+    res.items.forEach(function(it){
+      var row = document.createElement('div');
+      row.className = 'mat-row' + (it.strong ? ' strong' : '');
+      var left = document.createElement('div');
+      left.className = 'ml';
+      left.appendChild(document.createTextNode(it.label));
+      if(it.detail){
+        var d = document.createElement('span');
+        d.className = 'md';
+        d.textContent = it.detail;
+        left.appendChild(d);
+      }
+      var q = document.createElement('div');
+      q.className = 'mq';
+      q.textContent = fmtN(it.qty) + (it.unit || '');
+      row.appendChild(left); row.appendChild(q);
+      host.appendChild(row);
+    });
+    var geoTxt = 'Esquinas detectadas: ' + res.geo.corners + (matCfg.closed ? '' : ' · extremos: 2') + '.';
+    document.getElementById('matHint').textContent = matCfg.kind === 'alambrado' ?
+      geoTxt + ' Cada esquina y extremo lleva un arranque o un palo con rienda. Si el GPS contó de más o de menos, corregí las cantidades de abajo.' :
+      geoTxt + ' Las estacas se cuentan también en cada esquina y extremo. Si algo no cuadra con lo que ves en el campo, corregí los datos de abajo.';
+    var pa = document.getElementById('cfm-arranques'), pr = document.getElementById('cfm-rienda');
+    if(pa) pa.placeholder = 'auto: ' + res.arranquesAuto;
+    if(pr) pr.placeholder = 'auto: ' + res.riendaAuto;
+  }
+  function matText(){
+    var s = getShape(matShapeId);
+    if(!s || !matCfg) return '';
+    return cercoText(s.name, matCfg, cercoMaterials(s.points, matCfg), s.areaHa);
+  }
+  function legacyCopy(text){
+    try{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px;';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    }catch(e){ return false; }
+  }
+  function copyText(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text).then(function(){ return true; }, function(){ return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+  function flashBtn(btn, text){
+    var old = btn.dataset.label || btn.textContent;
+    btn.dataset.label = old;
+    btn.textContent = text;
+    setTimeout(function(){ btn.textContent = old; }, 1600);
+  }
+  function matCopy(){
+    var btn = document.getElementById('matCopyBtn');
+    var text = matText();
+    if(!text) return;
+    copyText(text).then(function(ok){
+      if(ok) flashBtn(btn, '¡Copiado!');
+      else alert('No se pudo copiar. Probá con "Compartir".');
+    });
+  }
+  function matShare(){
+    var text = matText();
+    if(!text) return;
+    var s = getShape(matShapeId);
+    if(navigator.share){
+      navigator.share({ title: s ? s.name : 'Cerco', text: text }).catch(function(){});
+    } else {
+      copyText(text).then(function(ok){
+        flashBtn(document.getElementById('matShareBtn'), ok ? '¡Copiado!' : 'No se pudo');
+      });
+    }
+  }
+
   // ---------- locate ----------
   function locateMe(){
     if(!navigator.geolocation){ alert('Este dispositivo no puede compartir su ubicación.'); return; }
@@ -1897,8 +2924,19 @@
 
   // ---------- wire up ----------
   document.querySelectorAll('.type-btn').forEach(function(btn){
-    btn.addEventListener('click', function(){ startDrawing(btn.dataset.type); });
+    btn.addEventListener('click', function(){
+      if(btn.dataset.type === 'cerco') openCercoSheet(); else startDrawing(btn.dataset.type);
+    });
   });
+  document.getElementById('cercoCloseBtn').addEventListener('click', closeCercoSheet);
+  document.getElementById('cercoBackdrop').addEventListener('click', function(e){ if(e.target === this) closeCercoSheet(); });
+  document.getElementById('cercoTabNew').addEventListener('click', function(){ cercoTab = 'nuevo'; renderCercoSheet(); });
+  document.getElementById('cercoTabSaved').addEventListener('click', function(){ cercoTab = 'guardados'; renderCercoSheet(); });
+  document.getElementById('cercoMeasureBtn').addEventListener('click', cercoMeasureNow);
+  document.getElementById('matCloseBtn').addEventListener('click', closeMaterials);
+  document.getElementById('matBackdrop').addEventListener('click', function(e){ if(e.target === this) closeMaterials(); });
+  document.getElementById('matCopyBtn').addEventListener('click', matCopy);
+  document.getElementById('matShareBtn').addEventListener('click', matShare);
   document.getElementById('undoBtn').addEventListener('click', undoLastPoint);
   document.getElementById('gpsToggleBtn').addEventListener('click', toggleGps);
   document.getElementById('cancelDrawBtn').addEventListener('click', cancelDrawing);
