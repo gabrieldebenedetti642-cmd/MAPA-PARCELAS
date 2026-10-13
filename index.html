@@ -246,6 +246,10 @@
   .row-actions button.del{color:var(--danger);}
   .empty-state{text-align:center;padding:30px 10px;color:var(--text-muted);font-size:14px;line-height:1.5;}
   .row-item .notes{font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic;}
+  /* al buscar, las notas se ven completas (si no, el texto que coincide puede quedar cortado) */
+  .list-scroll.searching .row-item .notes{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
+  .list-scroll.searching .row-item .name{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
+  .row-item mark{background:rgba(242,201,76,0.45);color:inherit;border-radius:3px;padding:0 1px;}
   .undo-toast{
     position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);z-index:1200;
     background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
@@ -412,7 +416,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
       </button>
     </h2>
-    <input type="search" class="text-input" id="searchInput" placeholder="Buscar por nombre..." style="margin-bottom:10px;">
+    <input type="search" class="text-input" id="searchInput" placeholder="Buscar por nombre, notas, estado..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" style="margin-bottom:10px;">
     <div class="summary-line" id="summaryLine">Todavía no hay nada marcado.</div>
     <div class="list-scroll" id="listScroll"></div>
   </div>
@@ -1226,11 +1230,62 @@
     document.getElementById('listBackdrop').classList.remove('show');
   }
 
+  /* ---------- Búsqueda: nombre + notas + estado + tipo, sin importar mayúsculas ni tildes ---------- */
+  function normText(str){
+    return String(str == null ? '' : str).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+  function searchWords(raw){
+    return normText(raw).split(/\s+/).filter(Boolean);
+  }
+  function shapeSearchText(s){
+    var statusLabel = s.status === 'ocupado' ? 'ocupado' : (s.status === 'descansando' ? 'descansando' : '');
+    var typeLabel = TYPE_INFO[s.type] ? TYPE_INFO[s.type].label : '';
+    return normText([s.name, s.notes, statusLabel, typeLabel].join(' '));
+  }
+  // Pone el texto en el elemento resaltando (con <mark>) las palabras buscadas
+  function setHighlighted(el, text, words){
+    el.textContent = '';
+    text = String(text == null ? '' : text);
+    if(!words || !words.length){ el.textContent = text; return; }
+    var norm = '', map = [], i, k;
+    for(i = 0; i < text.length; i++){
+      var n = normText(text.charAt(i));
+      for(k = 0; k < n.length; k++){ norm += n.charAt(k); map.push(i); }
+    }
+    var marked = [];
+    for(i = 0; i < text.length; i++) marked.push(false);
+    words.forEach(function(w){
+      var from = 0, idx;
+      while((idx = norm.indexOf(w, from)) !== -1){
+        var a = map[idx], b = map[idx + w.length - 1] + 1;
+        while(b < text.length && /[̀-ͯ]/.test(text.charAt(b))) b++;
+        for(var j = a; j < b; j++) marked[j] = true;
+        from = idx + w.length;
+      }
+    });
+    var start = 0;
+    while(start < text.length){
+      var end = start;
+      while(end < text.length && marked[end] === marked[start]) end++;
+      var piece = text.substring(start, end);
+      if(marked[start]){
+        var m = document.createElement('mark');
+        m.textContent = piece;
+        el.appendChild(m);
+      } else {
+        el.appendChild(document.createTextNode(piece));
+      }
+      start = end;
+    }
+  }
+
   function renderListContent(){
     var scroll = document.getElementById('listScroll');
     var summary = document.getElementById('summaryLine');
     var rawQuery = document.getElementById('searchInput').value.trim();
-    var query = rawQuery.toLowerCase();
+    var words = searchWords(rawQuery);
+    var query = words.length > 0;
+    scroll.classList.toggle('searching', query);
     scroll.innerHTML = '';
 
     if(!shapes.length){
@@ -1239,7 +1294,10 @@
       return;
     }
 
-    var visible = query ? shapes.filter(function(s){ return s.name.toLowerCase().indexOf(query) !== -1; }) : shapes;
+    var visible = query ? shapes.filter(function(s){
+      var hay = shapeSearchText(s);
+      return words.every(function(w){ return hay.indexOf(w) !== -1; });
+    }) : shapes;
 
     if(query){
       summary.textContent = visible.length + ' resultado' + (visible.length!==1?'s':'') + ' para "' + rawQuery + '"';
@@ -1257,7 +1315,7 @@
     }
 
     if(query && !visible.length){
-      scroll.innerHTML = '<div class="empty-state">No se encontró ningún elemento con ese nombre.</div>';
+      scroll.innerHTML = '<div class="empty-state">No hay nada que coincida con <b>' + escapeHtml(rawQuery) + '</b>.<br>Se busca en el nombre, las notas, el estado y el tipo.</div>';
       return;
     }
 
@@ -1269,12 +1327,12 @@
       titleEl.textContent = TYPE_INFO[type].label + 's';
       scroll.appendChild(titleEl);
       group.forEach(function(s){
-        scroll.appendChild(buildRow(s));
+        scroll.appendChild(buildRow(s, query ? words : null));
       });
     });
   }
 
-  function buildRow(s){
+  function buildRow(s, words){
     var info = TYPE_INFO[s.type];
     var row = document.createElement('div');
     row.className = 'row-item';
@@ -1295,8 +1353,8 @@
         '<button class="edit" aria-label="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>' +
         '<button class="del" aria-label="Borrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7H20M9 7V4H15V7M6 7L7 20H17L18 7"/></svg></button>' +
       '</div>';
-    row.querySelector('.name').textContent = s.name;
-    if(s.notes) row.querySelector('.notes').textContent = s.notes;
+    setHighlighted(row.querySelector('.name'), s.name, words);
+    if(s.notes) setHighlighted(row.querySelector('.notes'), s.notes, words);
     row.querySelector('.go').addEventListener('click', function(){ flyToShape(s.id); closeListModal(); });
     row.querySelector('.edit').addEventListener('click', function(){ startEditShape(s.id); });
     row.querySelector('.del').addEventListener('click', function(){ deleteShape(s.id); });
