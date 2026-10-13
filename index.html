@@ -54,7 +54,7 @@
   /* ---------- Header ---------- */
   header{
     flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
-    padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;
+    padding:max(env(safe-area-inset-top,0px) + 2px, 8px) 14px 8px;
     background:var(--bg-dark-t);border-bottom:1px solid var(--border);
     position:relative;z-index:500;
   }
@@ -70,9 +70,10 @@
   }
   .icon-btn:active{background:rgba(245,243,238,0.18);}
   .badge{
-    position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 3px;
-    background:var(--parcela);color:#1C2620;font-size:10px;font-weight:700;
-    border-radius:8px;display:flex;align-items:center;justify-content:center;
+    position:absolute;top:-4px;right:-4px;min-width:19px;height:19px;padding:0 4px;
+    background:#F28C1E;color:#161C18;font-size:11px;font-weight:800;line-height:1;
+    border-radius:10px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 2px var(--bg-dark);pointer-events:none;z-index:2;
   }
   /* ---------- Map area ---------- */
   #mapWrap{flex:1 1 auto;min-height:0;position:relative;}
@@ -154,13 +155,13 @@
   /* ---------- Bottom toolbar ---------- */
   #toolbarZone{
     flex:0 0 auto;background:var(--bg-dark-t);border-top:1px solid var(--border);
-    padding:10px 10px calc(env(safe-area-inset-bottom,0px) + 10px);
+    padding:6px 10px max(env(safe-area-inset-bottom,0px) - 14px, 8px);
     position:relative;z-index:500;
   }
   #toolbarDefault{display:flex;gap:8px;}
   .type-btn{
-    flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
-    padding:10px 4px 8px;border-radius:var(--radius);border:1px solid var(--border);
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+    padding:7px 4px 6px;border-radius:var(--radius);border:1px solid var(--border);
     background:rgba(245,243,238,0.05);color:var(--text-light);
   }
   .type-btn:active{background:rgba(245,243,238,0.14);}
@@ -251,7 +252,7 @@
   .list-scroll.searching .row-item .name{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
   .row-item mark{background:rgba(242,201,76,0.45);color:inherit;border-radius:3px;padding:0 1px;}
   .undo-toast{
-    position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);z-index:1200;
+    position:fixed;left:12px;right:12px;bottom:calc(max(env(safe-area-inset-bottom,0px) - 14px, 8px) + 74px);z-index:1200;
     background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
     padding:12px 14px;display:none;align-items:center;justify-content:space-between;gap:12px;
     box-shadow:0 6px 18px rgba(0,0,0,0.4);color:var(--text-light);font-size:14px;
@@ -260,7 +261,7 @@
   .undo-toast button{background:none;border:none;color:#4CAF50;font-weight:700;font-size:14px;flex-shrink:0;}
   /* menu popover */
   .menu-pop{
-    position:absolute;top:calc(env(safe-area-inset-top,0px) + 52px);right:14px;z-index:1050;
+    position:absolute;top:calc(max(env(safe-area-inset-top,0px) + 2px, 8px) + 44px);right:14px;z-index:1050;
     background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
     min-width:170px;display:none;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,0.4);
   }
