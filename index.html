@@ -303,6 +303,10 @@
   :root{ --cerco:#FFD60A; }
   body.theme-light{ --cerco:#D9A800; }
   .type-btn.cerco svg{color:var(--cerco);}
+  .type-btn{min-width:0;}
+  .type-btn.cerco{flex:1.55;}
+  .type-btn.cerco span{white-space:nowrap;}
+  @media (max-width:350px){ .type-btn.cerco span{font-size:11px;} }
   .seg{display:flex;gap:6px;margin:0 0 12px;}
   .seg button{
     flex:1;min-height:42px;padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);
@@ -441,7 +445,7 @@
     </button>
     <button class="type-btn cerco" data-type="cerco">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5V20M12 5V20M19 5V20"/><path d="M2.5 9H21.5M2.5 15H21.5"/></svg>
-      <span>Cerco</span>
+      <span>Medición cerco</span>
     </button>
   </div>
   <div id="toolbarDrawing">
@@ -541,7 +545,7 @@
 <div class="backdrop" id="cercoBackdrop">
   <div class="sheet" style="height:82vh;">
     <div class="sheet-handle"></div>
-    <h2>Cerco
+    <h2>Medición cerco
       <button class="close-x" id="cercoCloseBtn" aria-label="Cerrar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6L18 18M18 6L6 18"/></svg>
       </button>
@@ -770,7 +774,7 @@
     if(kind === 'electrico'){
       return { kind:'electrico', closed:false, p:{ hilos:1, espEstaca:40, angMin:CERCO_ANG_MIN, mRollo:null }, arranques:null, rienda:null, postes:null, fin:'arranque' };
     }
-    return { kind:'alambrado', closed:false, p:{ espPoste:15, espPique:50, hilos:8, postesPorArranque:2, postesPorRienda:1, angMin:CERCO_ANG_MIN, mRollo:null }, arranques:null, rienda:null, postes:null, fin:'arranque' };
+    return { kind:'alambrado', closed:false, p:{ espPoste:15, piquesCentro:7, hilos:8, postesPorArranque:2, postesPorRienda:1, angMin:CERCO_ANG_MIN, mRollo:null }, arranques:null, rienda:null, postes:null, fin:'arranque' };
   }
 
   // Completa lo que falte (cercos guardados por una versión anterior, o a mano) con los valores por defecto
@@ -792,6 +796,7 @@
         else out.p[k] = Number(pv);
       }
     }
+    if(out.kind === 'alambrado') out.p.piquesCentro = Math.max(0, Math.round(out.p.piquesCentro));
     return out;
   }
 
@@ -1088,16 +1093,20 @@
       return res;
     }
 
-    var espPoste = cercoNum(p.espPoste, 15), espPique = cercoNum(p.espPique, 50);
+    var espPoste = cercoNum(p.espPoste, 15);
+    var ppc = Math.max(0, Math.round(cercoNum(p.piquesCentro, 7)));     // piques por centro
     var ppa = Math.max(0, cercoNum(p.postesPorArranque, 2)), ppr = Math.max(0, cercoNum(p.postesPorRienda, 1));
-    var comunes = 0, piques = 0;
-    if(geo.ring0){ comunes = cercoSpans(L, espPoste); piques = cercoSpans(L, espPique); }
+    // Un "centro" es el tramo entre un poste y el siguiente (cada ~15 m). Los piques van dentro de cada centro.
+    var comunes = 0, centros = 0;
+    if(geo.ring0){ comunes = cercoSpans(L, espPoste); centros = comunes; }
     else {
       for(i = 0; i < geo.runs.length; i++){
-        comunes += Math.max(0, cercoSpans(geo.runs[i], espPoste) - 1);
-        piques  += Math.max(0, cercoSpans(geo.runs[i], espPique) - 1);
+        var sp = cercoSpans(geo.runs[i], espPoste);
+        comunes += Math.max(0, sp - 1);      // postes comunes: uno menos que los centros, los extremos del tramo ya son arranque o rienda
+        centros += sp;
       }
     }
+    var piques = centros * ppc;
     var sites = res.sites;
     var rBlank = (cerco.rienda === null || cerco.rienda === undefined || cerco.rienda === '');
     var aBlank = (cerco.arranques === null || cerco.arranques === undefined || cerco.arranques === '');
@@ -1107,14 +1116,14 @@
     res.riendaAuto = cerco.fin === 'rienda' ? Math.max(0, sites - aMan) : 0;
     var postesArr = arr * ppa, postesRie = rienda * ppr;
     var total = comunes + postesArr + postesRie;
-    res.comunes = comunes; res.piques = piques; res.arranques = arr; res.rienda = rienda;
+    res.comunes = comunes; res.centros = centros; res.piquesCentro = ppc; res.piques = piques; res.arranques = arr; res.rienda = rienda;
     res.postesArranque = postesArr; res.postesRienda = postesRie; res.postesTotal = total; res.alambre = alambre;
     res.arranquesAuto = Math.max(0, sites - rienda);
     res.items.push({ key:'comunes', label:'Postes comunes', qty:comunes, unit:'', detail:'uno cada ' + fmtSp(espPoste) + ' m' });
     if(arr > 0) res.items.push({ key:'arranques', label:'Arranques', qty:arr, unit:'', detail:fmtN(ppa) + ' postes c/u = ' + fmtN(postesArr) + ' postes' });
     if(rienda > 0) res.items.push({ key:'rienda', label:'Palos con rienda', qty:rienda, unit:'', detail:fmtN(ppr) + (ppr === 1 ? ' poste' : ' postes') + ' + rienda c/u = ' + fmtN(postesRie) + ' postes' });
     res.items.push({ key:'total', label:'Postes en total', qty:total, unit:'', detail:'', strong:true });
-    res.items.push({ key:'piques', label:'Piques', qty:piques, unit:'', detail:'uno cada ' + fmtSp(espPique) + ' m' });
+    res.items.push({ key:'piques', label:'Piques', qty:piques, unit:'', detail:fmtN(ppc) + ' por centro × ' + fmtN(centros) + (centros === 1 ? ' centro' : ' centros') });
     res.items.push({ key:'alambre', label:'Alambre', qty:alambre, unit:' m', detail:hilos + (hilos === 1 ? ' hilo' : ' hilos') + ' × ' + fmtN(L) + ' m' });
     if(mRollo > 0) res.items.push({ key:'rollos', label:'Rollos', qty:Math.ceil(alambre / mRollo - 1e-6), unit:'', detail:'de ' + fmtN(mRollo) + ' m' });
     res.short = fmtN(total) + ' postes · ' + fmtN(piques) + ' piques · ' + fmtN(alambre) + ' m de alambre';
@@ -2336,7 +2345,7 @@
 
     if(!shapes.length){
       summary.textContent = 'Todavía no hay nada marcado.';
-      scroll.innerHTML = '<div class="empty-state">Tocá <b>Campo</b>, <b>Parcela</b>, <b>Línea</b> o <b>Cerco</b> abajo para empezar a marcar en el mapa.</div>';
+      scroll.innerHTML = '<div class="empty-state">Tocá <b>Campo</b>, <b>Parcela</b>, <b>Línea</b> o <b>Medición cerco</b> abajo para empezar a marcar en el mapa.</div>';
       return;
     }
 
@@ -2777,8 +2786,8 @@
   // ======================================================================
   var CERCO_FIELDS = {
     alambrado: [
-      { key:'espPoste', label:'Metros entre postes', unit:'m', min:1 },
-      { key:'espPique', label:'Metros entre piques', unit:'m', min:1 },
+      { key:'espPoste', label:'Metros entre postes', sub:'largo de cada centro', unit:'m', min:1 },
+      { key:'piquesCentro', label:'Piques por centro', sub:'los que van entre poste y poste', int:true, min:0 },
       { key:'hilos', label:'Hilos de alambre', int:true, min:1 },
       { key:'postesPorArranque', label:'Postes por arranque', int:true, min:0 },
       { key:'postesPorRienda', label:'Postes por palo con rienda', int:true, min:0 },
@@ -2953,7 +2962,7 @@
     }
   }
 
-  // ---- hoja "Cerco": Nuevo / Guardados ----
+  // ---- hoja "Medición cerco": Nuevo / Guardados ----
   function openCercoSheet(tab){
     if(!cercoSetup){
       var prefs = loadCercoPrefs();
