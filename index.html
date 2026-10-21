@@ -377,7 +377,7 @@
 <div id="menuPop" class="menu-pop">
   <button id="syncMenuBtn">Sincronizar con otro aparato</button>
   <hr>
-  <button id="rotateMenuBtn">Girar el mapa con 2 dedos: no</button>
+  <button id="rotateMenuBtn">Girar el mapa con 2 dedos: sí</button>
   <hr>
   <button id="exportBtn">Exportar lista</button>
   <hr>
@@ -1149,13 +1149,15 @@
     // maxZoom 19 (antes 20): más allá de eso la imagen ya está agrandada 8 veces y el iPhone se traba.
     // updateWhenZooming:false: mientras hacés pinza no se piden imágenes de cada nivel intermedio
     // (en señal floja esos pedidos se cancelaban unos a otros y el mapa quedaba en blanco); se piden al soltar.
-    tileLayerRef = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    tileLayerRef = makeImageryLayer({
       maxZoom: 19,
       maxNativeZoom: 17,
       updateWhenZooming: false,
+      zIndex: 40,
       errorTileUrl: TILE_ERROR_GIF
     }).addTo(map);
     watchTiles(tileLayerRef);
+    map.on('movestart move zoomstart zoom rotate', covNoteMove);
 
     drawnLayerGroup = L.layerGroup().addTo(map);
     map.setView([-34.6, -63.5], 6);
@@ -1172,9 +1174,11 @@
   }
 
   // ---------- Carga del mapa: aviso en pantalla y reintento de imágenes que fallaron ----------
-  var TILE_ERROR_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7';
-  var tileLayerRef = null;
-  var tw = { errs:0, pending:[], failed:[], busy:0 };
+  // Cuadro de error: transparente. (Antes era un pixel BLANCO opaco: cada imagen que fallaba dejaba un hueco blanco en el mapa.)
+  // Ahora deja ver la imagen de menor detalle que hay abajo.
+  var TILE_ERROR_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  var tileLayerRef = null, fbLayers = {};
+  var tw = { errs:0, pending:[], failed:[], busy:0, note:null, noteNext:0 };
   var TILE_MAX_RETRIES = 4;
 
   function twAlive(list){
@@ -1205,19 +1209,127 @@
       return;
     }
     tw.busy = 0;
-    if(tw.failed.length){
+    var gapBig = cov.gap >= 3 && cov.frac >= 0.25;       // un hueco grande sin ninguna imagen (ni de respaldo)
+    if(gapBig || (tw.failed.length && !Object.keys(fbLayers).length)){
       el.textContent = 'Faltan imágenes del mapa · tocá para reintentar';
       el.classList.add('show');
       return;
     }
+    if(tw.failed.length) noteLowDetail();                // hay imagen de respaldo: solo se avisa un ratito
     tw.errs = 0;
+    if(tw.note && Date.now() < tw.note.until){          // aviso informativo, unos segundos
+      el.textContent = tw.note.text;
+      el.classList.add('show');
+      return;
+    }
     el.classList.remove('show');
   }
 
+  // ---------- Imagen satelital: cuadros "sin datos", fallas y respaldo de menor detalle ----------
+  // Donde Esri no tiene foto nítida devuelve un cuadro gris liso ("Map data not yet available") que se
+  // veía como un hueco gris para siempre. Acá se lo reconoce, se lo deja transparente y se muestra
+  // la imagen de menor detalle de esa zona (nivel 16, 15 o 13: el primero que tenga foto).
+  var ESRI_TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  var FALLBACK_NATIVE = [16, 15, 13];
+  var ND_N = 128, ndCanvas = null, ImageryLayer = null;
+  var imgCors = { ok:0, offLoads:0, pauseUntil:0 };  // CORS = permiso para mirar los píxeles de cada cuadro
+
+  // El cuadro "sin datos" es un gris clarito perfectamente liso (salvo un texto chico). Una foto real,
+  // por pareja que sea la zona, siempre tiene algo de textura: nunca casi todos los píxeles quedan del mismo color.
+  function looksLikeNoData(d){
+    var n = d.length / 4, r = 0, g = 0, b = 0, i;
+    for(i = 0; i < d.length; i += 4){ r += d[i]; g += d[i+1]; b += d[i+2]; }
+    r /= n; g /= n; b /= n;
+    var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    var chroma = Math.max(r, g, b) - Math.min(r, g, b);
+    if(lum < 170 || chroma > 24) return false;       // una foto real no es gris clarito
+    var flat = 0;
+    for(i = 0; i < d.length; i += 4){
+      if(Math.abs(d[i] - r) <= 5 && Math.abs(d[i+1] - g) <= 5 && Math.abs(d[i+2] - b) <= 5) flat++;
+    }
+    return flat / n >= 0.9;                          // y casi todo del mismo color
+  }
+  // true: es el cuadro gris "sin datos" · false: es una imagen normal · null: no se pudo mirar
+  function noDataVerdict(img){
+    if(img.crossOrigin === null || img.crossOrigin === undefined) return null;
+    try{
+      if(!ndCanvas){ ndCanvas = document.createElement('canvas'); ndCanvas.width = ndCanvas.height = ND_N; }
+      var ctx = ndCanvas.getContext('2d', { willReadFrequently:true });
+      ctx.clearRect(0, 0, ND_N, ND_N);
+      ctx.drawImage(img, 0, 0, ND_N, ND_N);
+      var d = ctx.getImageData(0, 0, ND_N, ND_N).data;
+      imgCors.ok++;
+      return looksLikeNoData(d);
+    }catch(e){ return null; }
+  }
+
+  function makeImageryLayer(opts){
+    if(!ImageryLayer && window.L && L.TileLayer && L.TileLayer.extend){
+      ImageryLayer = L.TileLayer.extend({
+        createTile: function(coords, done){
+          var layer = this;
+          this.options.crossOrigin = Date.now() >= imgCors.pauseUntil ? 'anonymous' : false;
+          return L.TileLayer.prototype.createTile.call(this, coords, function(err, tile){
+            if(err || tile._ndDone){ done(err, tile); return; }
+            tile._ndDone = true;
+            if(noDataVerdict(tile) === true){
+              tile.src = TILE_ERROR_GIF;               // transparente: el "load" de este cuadro termina la carga
+              onNoData(coords.z);
+              return;
+            }
+            done(null, tile);
+          });
+        }
+      });
+    }
+    return ImageryLayer ? new ImageryLayer(ESRI_TILES, opts) : L.tileLayer(ESRI_TILES, opts);
+  }
+
+  function noteLowDetail(){
+    var now = Date.now();
+    if(now >= tw.noteNext){
+      tw.note = { text:'Zona con imagen satelital de menor detalle', until: now + 4000 };
+      tw.noteNext = now + 60000;
+    }
+  }
+  function onNoData(tileZoom){
+    ensureFallback(tileZoom);                            // respaldo: el primer nivel más bajo que tenga foto
+    noteLowDetail();
+  }
+
+  // Capa de respaldo con menos detalle (se crea recién cuando hace falta, así no se gastan datos de más)
+  function ensureFallback(fromNative){
+    if(!map) return;
+    for(var i = 0; i < FALLBACK_NATIVE.length; i++){
+      var nz = FALLBACK_NATIVE[i];
+      if(nz >= fromNative) continue;
+      if(!fbLayers[nz]){
+        var l = makeImageryLayer({ minZoom:nz + 1, maxZoom:19, maxNativeZoom:nz, updateWhenZooming:false, keepBuffer:1, zIndex:nz, errorTileUrl:TILE_ERROR_GIF });
+        fbLayers[nz] = l;
+        l.addTo(map);
+        watchTiles(l);
+      }
+      return;
+    }
+  }
+
+  function redrawTiles(){
+    if(tileLayerRef) tileLayerRef.redraw();
+    Object.keys(fbLayers).forEach(function(k){ fbLayers[k].redraw(); });
+  }
+
+  var tileWatchOn = false;
   function watchTiles(layer){
     layer.on('tileload', function(e){
       var t = e.tile;
       if(!t || String(t.getAttribute('src')).indexOf('data:image/gif') === 0) return;   // el cuadro vacío de error no cuenta como imagen cargada
+      if(t._corsOff === true){                         // cargó recién al pedirla sin CORS: si pasa seguido, el servidor no deja mirar las imágenes
+        t._corsOff = 'ok';
+        imgCors.offLoads++;
+        if(imgCors.offLoads >= 8 && imgCors.ok === 0){   // se deja de pedir CORS un rato (después se vuelve a probar)
+          imgCors.pauseUntil = Date.now() + 60000; imgCors.offLoads = 0;
+        }
+      }
       twRemove(tw.pending, t);
       twRemove(tw.failed, t);
     });
@@ -1225,7 +1337,16 @@
       var t = e.tile;
       if(!t) return;
       twRemove(tw.pending, t);
+      if(t.crossOrigin !== null && t.crossOrigin !== undefined && !t._corsOff){
+        // puede ser que el servidor no permita mirar la imagen (CORS): se pide igual, sin mirarla
+        t._corsOff = true;
+        t.removeAttribute('crossorigin');
+        tw.pending.push(t);
+        try{ t.src = layer.getTileUrl(e.coords); }catch(err){ twRemove(tw.pending, t); }
+        return;
+      }
       tw.errs++;
+      if(layer === tileLayerRef) ensureFallback(e.coords && typeof e.coords.z === 'number' ? e.coords.z : layer.options.maxNativeZoom);   // mientras no llega, se ve la imagen de menos detalle y no un hueco
       var n = t._tries || 0;
       if(n >= TILE_MAX_RETRIES){                         // ya se intentó varias veces: queda marcada para reintentar tocando el cartel
         if(tw.failed.indexOf(t) === -1) tw.failed.push(t);
@@ -1239,20 +1360,102 @@
         try{ t.src = layer.getTileUrl(e.coords); }catch(err){ twRemove(tw.pending, t); }
       }, 800 + 1200 * n);
     });
-    window.addEventListener('online', function(){ if(tileLayerRef) tileLayerRef.redraw(); });
+    if(tileWatchOn) return;
+    tileWatchOn = true;
+    window.addEventListener('online', function(){ redrawTiles(); });
     var el = document.getElementById('mapStatus');
     if(el) el.addEventListener('click', function(){
       tw.errs = 0; tw.failed = []; tw.pending = [];
-      if(tileLayerRef) tileLayerRef.redraw();
+      cov.gap = 0; cov.rung = 0; cov.frac = 0;
+      redrawTiles();
     });
     setInterval(twTick, 700);
+    setInterval(covTick, 700);
   }
 
-  // Giro del mapa con dos dedos: apagado de fábrica (al hacer pinza se giraba solo y el mapa quedaba con zonas en blanco)
-  var ROTATE_KEY = 'mapaParcelas_rotate';
-  var rotatePref = false;
+  // ---------- Vigilante: si en la pantalla quedan huecos sin imagen, lo arregla solo ----------
+  // Con el mapa quieto, mide qué parte de la pantalla está cubierta por imágenes ya cargadas.
+  // Si falta bastante y no se arregla solo: 1) empujoncito para que pida lo que falta, 2) recarga las imágenes,
+  // 3) como último recurso, endereza el mapa al norte y recarga. Cada vista se intenta una sola vez.
+  var cov = { gap:0, rung:0, frac:0, lastMove:0, internal:false };
+  var COV_COLS = 6, COV_ROWS = 8;
+  function covNoteMove(){
+    if(cov.internal) return;
+    cov.lastMove = Date.now(); cov.gap = 0; cov.rung = 0; cov.frac = 0;
+  }
+  // parte de la pantalla (0 a 1) que NO tiene ninguna imagen cargada (ni de la capa principal ni de las de respaldo)
+  function covGapFraction(){
+    if(!tileLayerRef || !tileLayerRef.getContainer || !map) return 0;
+    var layers = [tileLayerRef].concat(Object.keys(fbLayers).map(function(k){ return fbLayers[k]; }));
+    var r = map.getContainer().getBoundingClientRect();
+    if(r.width < 50 || r.height < 50) return 0;
+    var rects = [], i, j, b, tiles, box, left = 800;
+    for(j = 0; j < layers.length; j++){
+      box = layers[j].getContainer && layers[j].getContainer();
+      if(!box) continue;
+      tiles = box.querySelectorAll('.leaflet-tile-loaded');
+      for(i = 0; i < tiles.length && left > 0; i++){
+        if(String(tiles[i].getAttribute('src')).indexOf('data:image/gif') === 0) continue;   // cuadro transparente: no hay imagen ahí
+        b = tiles[i].getBoundingClientRect();
+        if(b.right < r.left || b.left > r.right || b.bottom < r.top || b.top > r.bottom) continue;
+        rects.push({ l:b.left - 1, r:b.right + 1, t:b.top - 1, b:b.bottom + 1 });
+        left--;
+      }
+    }
+    var miss = 0, cx, cy, k, x, y, ok;
+    for(cx = 0; cx < COV_COLS; cx++){
+      for(cy = 0; cy < COV_ROWS; cy++){
+        x = r.left + r.width * (cx + 0.5) / COV_COLS;
+        y = r.top + r.height * (cy + 0.5) / COV_ROWS;
+        ok = false;
+        for(k = 0; k < rects.length; k++){
+          if(x >= rects[k].l && x <= rects[k].r && y >= rects[k].t && y <= rects[k].b){ ok = true; break; }
+        }
+        if(!ok) miss++;
+      }
+    }
+    return miss / (COV_COLS * COV_ROWS);
+  }
+  function covNudge(){
+    cov.internal = true;
+    try{ map.panBy([1, 0], { animate:false }); map.panBy([-1, 0], { animate:false }); }catch(e){}
+    cov.internal = false;
+  }
+  function covTick(){
+    if(!map || !tileLayerRef || document.hidden || map.getZoom() < 4) return;   // muy alejado el mundo no llena la pantalla: no es un hueco
+    if(mt.active || vertexDrag || Date.now() - cov.lastMove < 900){ cov.gap = 0; return; }   // moviendo el mapa: todavía no se mide
+    cov.frac = covGapFraction();
+    if(cov.frac < 0.06){ cov.gap = 0; cov.rung = 0; return; }
+    cov.gap++;
+    var busy = twCount() + tw.pending.length > 0;
+    if(cov.rung < 1 && cov.gap >= 3){ cov.rung = 1; covNudge(); return; }
+    if(cov.rung < 2 && cov.gap >= 7 && (!busy || cov.gap >= 20)){ cov.rung = 2; ensureFallback(Math.min(17, map.getZoom())); redrawTiles(); return; }
+    if(cov.rung < 3 && cov.gap >= 14 && (!busy || cov.gap >= 26)){
+      cov.rung = 3;
+      if(map.getBearing && map.getBearing() !== 0 && map.setBearing){
+        cov.internal = true;
+        try{ map.setBearing(0); }catch(e){}
+        cov.internal = false;
+      }
+      redrawTiles();
+    }
+  }
+
+  // Giro del mapa con dos dedos: prendido de fábrica y también mientras medís o editás.
+  // Se puede apagar desde el menú (queda guardado). Clave nueva: así nadie queda con el giro apagado de la versión anterior.
+  var ROTATE_KEY = 'mapaParcelas_rotate2';
+  var rotatePref = true;
   function loadRotatePref(){
-    try{ return localStorage.getItem(ROTATE_KEY) === '1'; }catch(e){ return false; }
+    try{ return localStorage.getItem(ROTATE_KEY) !== '0'; }catch(e){ return true; }
+  }
+  function applyRotationPref(){
+    if(!map) return;
+    if(rotatePref){
+      if(map.touchRotate) map.touchRotate.enable();
+    } else {
+      if(map.setBearing) map.setBearing(0);                  // giro apagado: el mapa vuelve al norte
+      if(map.touchRotate) map.touchRotate.disable();
+    }
   }
   function updateRotateMenuLabel(){
     document.getElementById('rotateMenuBtn').textContent = 'Girar el mapa con 2 dedos: ' + (rotatePref ? 'sí' : 'no');
@@ -1260,8 +1463,7 @@
   function toggleRotatePref(){
     rotatePref = !rotatePref;
     try{ localStorage.setItem(ROTATE_KEY, rotatePref ? '1' : '0'); }catch(e){}
-    if(!rotatePref && map.setBearing) map.setBearing(0);
-    setRotationEnabled(!mode);                       // si está dibujando sigue bloqueado
+    applyRotationPref();
     updateRotateMenuLabel();
     closeMenu();
   }
@@ -1508,7 +1710,6 @@
 
   function setupDrawingUI(type, title){
     stopGpsTracking();
-    setRotationEnabled(false);
     var info = curInfo();
     document.getElementById('toolbarDefault').style.display = 'none';
     var dt = document.getElementById('toolbarDrawing');
@@ -1549,6 +1750,8 @@
     });
     updatePreview();
     updateDrawUI();
+    // al empezar a editar el mapa se endereza al norte para que la figura entre entera en pantalla; después se gira libremente
+    if(map.getBearing && map.getBearing() !== 0 && map.setBearing) map.setBearing(0);
     map.flyToBounds(L.latLngBounds(drawPoints), { padding:[60,60], maxZoom:17 });
   }
 
@@ -1592,6 +1795,7 @@
   }
 
   function onMapClick(e){
+    if(mtBlocksClick()) return;             // viene de un gesto de 2 dedos (giro o pinza): no es un toque
     if(mode){
       addVertex(e.latlng);
       return;
@@ -1729,6 +1933,27 @@
       }
     }
   }
+  // ---------- Gestos de 2 dedos (giro / pinza) ----------
+  // Si en un mismo toque hubo dos dedos, el "click" que pudiera quedar al soltar se ignora:
+  // girar el mapa nunca agrega un punto ni abre un cartel por error. Un dedo nuevo vuelve a tocar normal.
+  var mt = { seq:false, active:false, t:0 };
+  function mtNote(ev){
+    var n = ev.touches ? ev.touches.length : 0;
+    if(ev.type === 'touchstart' && n <= 1) mt.seq = false;      // empieza un toque nuevo
+    if(n >= 2) mt.seq = true;
+    if(mt.seq) mt.t = Date.now();
+    mt.active = n >= 2;
+  }
+  function mtBlocksClick(){
+    return mt.seq && (Date.now() - mt.t) < 1500;
+  }
+
+  function setupGestureGuard(){
+    ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function(t){
+      document.addEventListener(t, mtNote, { capture:true, passive:true });
+    });
+  }
+
   function setupVertexDrag(){
     var c = map.getContainer();
     c.addEventListener('touchstart', vdStart, { capture:true, passive:false });
@@ -1795,7 +2020,6 @@
 
   function cancelDrawing(){
     stopGpsTracking();
-    setRotationEnabled(true);
     clearTempLayers();
     if(editingId){
       var shape = shapes.filter(function(s){ return s.id === editingId; })[0];
@@ -1809,15 +2033,6 @@
     document.getElementById('toolbarDrawing').classList.remove('show');
     document.getElementById('drawToast').classList.remove('show');
     document.getElementById('gpsToggleBtn').classList.remove('show');
-  }
-
-  function setRotationEnabled(enabled){
-    if(enabled && rotatePref){
-      if(map.touchRotate) map.touchRotate.enable();
-    } else {
-      if(!enabled && map.setBearing) map.setBearing(0);      // dibujando: el mapa queda mirando al norte
-      if(map.touchRotate) map.touchRotate.disable();
-    }
   }
 
   // ---------- GPS tracking mode ----------
@@ -1864,7 +2079,7 @@
     } else {
       gpsLiveMarker.setLatLng(latlng);
     }
-    if(gpsFollowMode) map.panTo(latlng, { animate:true });
+    if(gpsFollowMode && !mt.active && !vertexDrag) map.panTo(latlng, { animate:true });   // no pelea con el giro ni con un punto en movimiento
 
     if(typeof pos.coords.accuracy !== 'number' || pos.coords.accuracy > (drawCerco ? GPS_MAX_ACCURACY_CERCO : GPS_MAX_ACCURACY)) return;
 
@@ -3133,9 +3348,10 @@
   applyTheme(savedTheme);
   initMap();
   rotatePref = loadRotatePref();
-  setRotationEnabled(true);
+  applyRotationPref();
   updateRotateMenuLabel();
   setupVertexDrag();
+  setupGestureGuard();
   map.on('rotate', function(){
     if(!map.getBearing) return;
     document.getElementById('compassBtn').style.transform = 'rotate(' + (-map.getBearing()) + 'deg)';
