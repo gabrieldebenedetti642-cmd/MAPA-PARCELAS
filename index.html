@@ -276,6 +276,28 @@
   .list-scroll.searching .row-item .notes{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
   .list-scroll.searching .row-item .name{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
   .row-item mark{background:rgba(242,201,76,0.45);color:inherit;border-radius:3px;padding:0 1px;}
+  /* ---------- Ocultar / mostrar en el mapa y filtro del buscador ---------- */
+  .row-item .vis{width:34px;height:34px;margin:0 -2px 0 -5px;padding:0;flex:0 0 auto;background:none;border:none;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+  .row-item .vis .ring{width:22px;height:22px;border-radius:50%;border:2px solid var(--c,#888);background:var(--c,#888);display:flex;align-items:center;justify-content:center;transition:background .12s;}
+  .row-item .vis .ring svg{width:13px;height:13px;color:#fff;filter:drop-shadow(0 0 1px rgba(0,0,0,0.75));}
+  .row-item.is-off .vis .ring{background:transparent;}
+  .row-item.is-off .vis .ring svg{display:none;}
+  .row-item.is-off .name,.row-item.is-off .area,.row-item.is-off .notes,.row-item.is-off .cerco-sum{opacity:0.5;}
+  .row-item.is-out .name{opacity:0.55;}
+  .group-title .gvis{margin-left:8px;min-height:28px;padding:0 11px;border-radius:14px;border:1px solid var(--border);background:none;color:var(--text-light);font-size:12px;font-weight:600;flex:0 0 auto;}
+  .group-title .gvis:active{background:rgba(245,243,238,0.14);}
+  .vis-hint{font-size:12px;color:var(--text-muted);line-height:1.35;padding:2px 0 8px;}
+  .vis-hint + .group-title{margin-top:10px;}
+  .list-tools{margin:0 0 10px;}
+  .list-tools .btn{width:100%;flex:none;}
+  .ft-note{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text-muted);margin-top:8px;}
+  .ft-note span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ft-note button{flex:0 0 auto;min-height:30px;padding:0 12px;border-radius:15px;border:1px solid var(--border);background:none;color:var(--text-light);font-size:12.5px;font-weight:600;}
+  .view-chips{position:absolute;top:10px;left:10px;z-index:430;display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:calc(100% - 76px);pointer-events:none;}
+  .view-chip{pointer-events:auto;max-width:100%;display:flex;align-items:center;gap:8px;padding:3px 4px 3px 12px;border-radius:19px;background:var(--bg-dark-t);border:1px solid var(--border);color:var(--text-light);font-size:12.5px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.35);}
+  .view-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .view-chip button{flex:0 0 auto;min-height:30px;padding:0 13px;border-radius:15px;border:none;background:#FFD60A;color:#17211c;font-size:12.5px;font-weight:700;}
+  .undo-toast.info-toast{justify-content:center;text-align:center;}
   .undo-toast{
     position:fixed;left:12px;right:12px;bottom:calc(max(env(safe-area-inset-bottom,0px) - 14px, 8px) + 74px);z-index:1200;
     background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
@@ -417,6 +439,7 @@
     <strong id="drawToastTitle">Parcela</strong><span id="drawToastHint">: tocá el mapa para agregar vértices · arrastrá un punto para moverlo · tocalo para borrarlo</span>
     <span class="pcount" id="drawToastCount">0 puntos</span>
   </div>
+  <div class="view-chips" id="viewChips"></div>
   <button class="fab-gps" id="gpsToggleBtn" aria-label="Modo GPS">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21C12 21 19 14.5 19 9.5C19 5.9 15.9 3 12 3C8.1 3 5 5.9 5 9.5C5 14.5 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
   </button>
@@ -521,6 +544,7 @@
     </h2>
     <input type="search" class="text-input" id="searchInput" placeholder="Buscar por nombre, notas, estado..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" style="margin-bottom:10px;">
     <div class="summary-line" id="summaryLine">Todavía no hay nada marcado.</div>
+    <div class="list-tools" id="listTools" style="display:none;"></div>
     <div class="list-scroll" id="listScroll"></div>
   </div>
 </div>
@@ -589,6 +613,9 @@
   <span id="undoToastText"></span>
   <button id="undoDeleteBtn">Deshacer</button>
 </div>
+<div id="infoToast" class="undo-toast info-toast" role="status" aria-live="polite">
+  <span id="infoToastText"></span>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
@@ -606,6 +633,9 @@
   var shapes = [];          // saved shapes {id,type,name,points,areaHa}
   var layerById = {};       // id -> leaflet layer
   var labelMarkerById = {}; // id -> leaflet marker holding the name label
+  var MAPFILTER_KEY = 'mapaParcelas_mapFilter';
+  var mapFilter = '';       // texto del buscador aplicado al mapa ('' = se ve todo)
+  var mapFilterWords = [];
   var map, drawnLayerGroup;
   var mode = null;
   var editingId = null;     // id of the shape being edited, null when drawing a new one
@@ -1576,6 +1606,7 @@
   }
 
   function renderShapeOnMap(shape){
+    if(!shapeVisible(shape)){ delete layerById[shape.id]; delete labelMarkerById[shape.id]; return; }   // oculto o fuera del filtro: no se dibuja
     var cer = isCerco(shape);
     var info = infoOf(shape);
     var color = shape.color || info.color;
@@ -1611,6 +1642,176 @@
     c.classList.toggle('lbl-sm', z === 14);
   }
 
+  // ---------- Ocultar / mostrar en el mapa + filtro del buscador ----------
+  // Un elemento "oculto" (shape.oculto = true) sigue guardado y en la lista, pero no se dibuja en el mapa.
+  // El filtro del mapa muestra solo lo que coincide con un texto del buscador (nombre, notas, estado, tipo).
+  function shapeVisible(s){
+    if(s.oculto) return false;
+    if(mapFilterWords.length){
+      var hay = shapeSearchText(s);
+      for(var i = 0; i < mapFilterWords.length; i++){ if(hay.indexOf(mapFilterWords[i]) === -1) return false; }
+    }
+    return true;
+  }
+  function removeShapeLayers(id){
+    var l = layerById[id];
+    if(l) drawnLayerGroup.removeLayer(l);
+    var m = labelMarkerById[id];
+    if(m) drawnLayerGroup.removeLayer(m);
+    delete layerById[id];
+    delete labelMarkerById[id];
+  }
+  function applyMapVisibility(){
+    if(!drawnLayerGroup) return;
+    shapes.forEach(function(s){
+      var want = shapeVisible(s) && s.id !== editingId;
+      var has = !!layerById[s.id];
+      if(want && !has) renderShapeOnMap(s);
+      else if(!want && has) removeShapeLayers(s.id);
+    });
+    updateViewChips();
+  }
+  function loadMapFilter(){
+    try{ return localStorage.getItem(MAPFILTER_KEY) || ''; }catch(e){ return ''; }
+  }
+  function saveMapFilter(){
+    try{
+      if(mapFilter) localStorage.setItem(MAPFILTER_KEY, mapFilter);
+      else localStorage.removeItem(MAPFILTER_KEY);
+    }catch(e){}
+  }
+  function refreshListKeepScroll(){
+    if(!document.getElementById('listBackdrop').classList.contains('show')) return;
+    var sc = document.getElementById('listScroll'), top = sc.scrollTop;
+    renderListContent();
+    sc.scrollTop = top;
+  }
+  function setMapFilter(raw){
+    var words = searchWords(raw);
+    mapFilter = words.length ? String(raw).trim() : '';
+    mapFilterWords = words;
+    saveMapFilter();
+    applyMapVisibility();
+    refreshListKeepScroll();
+  }
+  function clearMapFilter(){ setMapFilter(''); }
+  // Aplica el texto del buscador al mapa y acerca la vista a lo que quedó
+  function applyFilterFromList(raw){
+    setMapFilter(raw);
+    closeListModal();
+    var pts = [];
+    shapes.forEach(function(s){
+      if(!shapeVisible(s)) return;
+      s.points.forEach(function(p){ pts.push(L.latLng(p[0], p[1])); });
+    });
+    if(pts.length) map.flyToBounds(L.latLngBounds(pts), { padding:[50,50], maxZoom:17 });
+    else showInfoToast('No hay nada para mostrar con ese filtro (puede estar oculto).');
+  }
+  function toggleShapeHidden(id){
+    var s = getShape(id);
+    if(!s) return;
+    if(s.oculto) delete s.oculto; else s.oculto = true;
+    saveShapes();
+    applyMapVisibility();
+    refreshListKeepScroll();
+  }
+  function setShapesHidden(ids, hide){
+    ids.forEach(function(id){
+      var s = getShape(id);
+      if(!s) return;
+      if(hide) s.oculto = true; else delete s.oculto;
+    });
+    saveShapes();
+    applyMapVisibility();
+    refreshListKeepScroll();
+  }
+  function showAllHidden(){
+    var any = false;
+    shapes.forEach(function(s){ if(s.oculto){ delete s.oculto; any = true; } });
+    if(!any) return;
+    saveShapes();
+    applyMapVisibility();
+    refreshListKeepScroll();
+  }
+  // Si lo que vas a ver o editar está oculto o fuera del filtro, se vuelve a mostrar (y se avisa)
+  function ensureShapeVisible(s){
+    var msg = '';
+    if(s.oculto){ delete s.oculto; saveShapes(); msg = '"' + s.name + '" vuelve a mostrarse en el mapa.'; }
+    if(mapFilterWords.length && !shapeVisible(s)){ setMapFilter(''); msg = 'Quité el filtro del mapa para poder ver "' + s.name + '".'; }
+    else if(msg) applyMapVisibility();
+    if(msg) showInfoToast(msg);
+  }
+  function makeViewChip(text, btnText, onClick){
+    var chip = document.createElement('div');
+    chip.className = 'view-chip';
+    var t = document.createElement('span');
+    t.textContent = text;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = btnText;
+    b.addEventListener('click', onClick);
+    chip.appendChild(t);
+    chip.appendChild(b);
+    return chip;
+  }
+  function updateViewChips(){
+    var host = document.getElementById('viewChips');
+    if(!host) return;
+    host.innerHTML = '';
+    if(mode) return;                    // mientras se dibuja o edita no se muestran
+    if(mapFilterWords.length){
+      var n = 0;
+      shapes.forEach(function(s){
+        var hay = shapeSearchText(s), ok = true;
+        for(var i = 0; i < mapFilterWords.length; i++){ if(hay.indexOf(mapFilterWords[i]) === -1){ ok = false; break; } }
+        if(ok) n++;
+      });
+      host.appendChild(makeViewChip('Solo "' + mapFilter + '" · ' + n + ' de ' + shapes.length, 'Quitar', clearMapFilter));
+    }
+    var hid = shapes.filter(function(s){ return s.oculto; }).length;
+    if(hid) host.appendChild(makeViewChip(hid + (hid === 1 ? ' oculto' : ' ocultos'), 'Mostrar', showAllHidden));
+  }
+  var infoToastTimer = null;
+  function showInfoToast(text){
+    var el = document.getElementById('infoToast');
+    document.getElementById('infoToastText').textContent = text;
+    el.classList.add('show');
+    if(infoToastTimer) clearTimeout(infoToastTimer);
+    infoToastTimer = setTimeout(function(){ el.classList.remove('show'); }, 4200);
+  }
+  // Barra de la lista: botón "Ver solo estos en el mapa" y aviso del filtro activo
+  function renderListTools(rawQuery, words, matchCount){
+    var host = document.getElementById('listTools');
+    host.innerHTML = '';
+    var active = mapFilterWords.length > 0;
+    var same = active && words.join(' ') === mapFilterWords.join(' ');
+    if(words.length && matchCount > 0 && !same){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'applyFilterBtn';
+      b.className = 'btn primary';
+      b.style.setProperty('--type-color', '#FFD60A');
+      b.textContent = 'Ver solo estos en el mapa (' + matchCount + ')';
+      b.addEventListener('click', function(){ applyFilterFromList(rawQuery); });
+      host.appendChild(b);
+    }
+    if(active){
+      var note = document.createElement('div');
+      note.className = 'ft-note';
+      var t = document.createElement('span');
+      t.textContent = 'El mapa muestra solo "' + mapFilter + '"';
+      var q = document.createElement('button');
+      q.type = 'button';
+      q.id = 'clearFilterBtn';
+      q.textContent = 'Quitar filtro';
+      q.addEventListener('click', clearMapFilter);
+      note.appendChild(t);
+      note.appendChild(q);
+      host.appendChild(note);
+    }
+    host.style.display = host.childNodes.length ? 'block' : 'none';
+  }
+
   function escapeHtml(s){
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -1643,6 +1844,7 @@
   function findShapeAtLatLng(latlng){
     for(var i = shapes.length - 1; i >= 0; i--){
       var s = shapes[i];
+      if(!layerById[s.id]) continue;            // oculto o fuera del filtro: no se puede tocar
       var info = infoOf(s);
       if(!isCerco(s) && info.isPolygon){
         if(pointInPolygon(latlng, s.points)) return s;
@@ -1719,6 +1921,7 @@
 
   function setupDrawingUI(type, title){
     stopGpsTracking();
+    updateViewChips();
     var info = curInfo();
     document.getElementById('toolbarDefault').style.display = 'none';
     var dt = document.getElementById('toolbarDrawing');
@@ -1742,6 +1945,7 @@
     if(!shape) return;
     closeListModal();
     closeCercoSheet();
+    ensureShapeVisible(shape);
     var oldLayer = layerById[id];
     if(oldLayer) drawnLayerGroup.removeLayer(oldLayer);
     var oldLabel = labelMarkerById[id];
@@ -2042,6 +2246,7 @@
     document.getElementById('toolbarDrawing').classList.remove('show');
     document.getElementById('drawToast').classList.remove('show');
     document.getElementById('gpsToggleBtn').classList.remove('show');
+    updateViewChips();
   }
 
   // ---------- GPS tracking mode ----------
@@ -2252,6 +2457,11 @@
       savedId = shape.id;
       renderShapeOnMap(shape);
     }
+    var savedShape = savedId ? getShape(savedId) : null;
+    if(savedShape && mapFilterWords.length && !shapeVisible(savedShape)){
+      setMapFilter('');
+      showInfoToast('Quité el filtro del mapa para que veas "' + savedShape.name + '".');
+    }
     saveShapes();
     updateListBadge();
     document.getElementById('nameBackdrop').classList.remove('show');
@@ -2261,6 +2471,7 @@
 
   // ---------- list modal ----------
   function updateListBadge(){
+    updateViewChips();
     var badge = document.getElementById('listBadge');
     if(shapes.length){
       badge.style.display = 'flex';
@@ -2344,6 +2555,7 @@
     scroll.innerHTML = '';
 
     if(!shapes.length){
+      renderListTools('', [], 0);
       summary.textContent = 'Todavía no hay nada marcado.';
       scroll.innerHTML = '<div class="empty-state">Tocá <b>Campo</b>, <b>Parcela</b>, <b>Línea</b> o <b>Medición cerco</b> abajo para empezar a marcar en el mapa.</div>';
       return;
@@ -2353,6 +2565,7 @@
       var hay = shapeSearchText(s);
       return words.every(function(w){ return hay.indexOf(w) !== -1; });
     }) : shapes;
+    renderListTools(rawQuery, words, visible.length);
 
     var counts = { campo:0, parcela:0, linea:0, cerco:0 };
     var parcelaHaTotal = 0;
@@ -2383,6 +2596,12 @@
     }
 
     var EMPTY_TEXT = { campo:'Ninguno todavía', parcela:'Ninguna todavía', linea:'Ninguna todavía', cerco:'Ninguno todavía' };
+    if(!query){
+      var hintEl = document.createElement('div');
+      hintEl.className = 'vis-hint';
+      hintEl.textContent = 'Tocá el círculo de color de cada fila para ocultarla o mostrarla en el mapa (no se borra).';
+      scroll.appendChild(hintEl);
+    }
     GROUPS.forEach(function(g){
       var info = g === 'cerco' ? CERCO_INFO : TYPE_INFO[g];
       var group = visible.filter(function(s){ return groupOf(s) === g; });
@@ -2412,6 +2631,18 @@
         haEl.textContent = fmtHa(ha);
         titleEl.appendChild(haEl);
       }
+      if(group.length){
+        var allOff = group.every(function(s){ return !!s.oculto; });
+        var gb = document.createElement('button');
+        gb.type = 'button';
+        gb.className = 'gvis';
+        gb.textContent = (allOff ? 'Mostrar' : 'Ocultar') + (query ? ' estos' : ' todos');
+        if(!titleEl.querySelector('.gha')) gb.style.marginLeft = 'auto';
+        gb.addEventListener('click', function(){
+          setShapesHidden(group.map(function(s){ return s.id; }), !allOff);
+        });
+        titleEl.appendChild(gb);
+      }
       scroll.appendChild(titleEl);
       if(!group.length){
         var emptyEl = document.createElement('div');
@@ -2433,6 +2664,8 @@
     row.className = 'row-item';
     var areaText = s.areaHa!=null ? fmtHa(s.areaHa) : '—';
     var statusText = '';
+    var isOff = !!s.oculto;
+    var isOut = !isOff && mapFilterWords.length > 0 && !shapeVisible(s);
     if(cer){
       areaText = cercoShortDesc(s);
     } else if(s.status){
@@ -2440,8 +2673,12 @@
       var dateText = s.statusDate ? ' desde ' + new Date(s.statusDate).toLocaleDateString('es-AR') : '';
       statusText = ' · ' + statusEmoji(s.status) + label + dateText;
     }
+    if(isOff) statusText += ' · oculto en el mapa';
+    else if(isOut) statusText += ' · fuera del filtro';
+    row.classList.toggle('is-off', isOff);
+    row.classList.toggle('is-out', isOut);
     row.innerHTML =
-      '<div class="dot" style="background:'+(s.color || info.color)+'"></div>' +
+      '<button class="vis" type="button"><span class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5L10 17.5L19 7"/></svg></span></button>' +
       '<div class="info"><div class="name"></div><div class="area"></div>' +
         (cer ? '<div class="cerco-sum"></div>' : '') +
         (s.notes ? '<div class="notes"></div>' : '') +
@@ -2452,6 +2689,11 @@
         '<button class="edit" aria-label="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>' +
         '<button class="del" aria-label="Borrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7H20M9 7V4H15V7M6 7L7 20H17L18 7"/></svg></button>' +
       '</div>';
+    var visBtn = row.querySelector('.vis');
+    visBtn.style.setProperty('--c', s.color || info.color);
+    visBtn.setAttribute('aria-label', isOff ? 'Mostrar en el mapa' : 'Ocultar del mapa');
+    visBtn.setAttribute('aria-pressed', isOff ? 'false' : 'true');
+    visBtn.addEventListener('click', function(){ toggleShapeHidden(s.id); });
     row.querySelector('.area').textContent = areaText + statusText;
     setHighlighted(row.querySelector('.name'), s.name, words);
     if(s.notes) setHighlighted(row.querySelector('.notes'), s.notes, words);
@@ -2470,6 +2712,8 @@
   }
 
   function flyToShape(id){
+    var sh = getShape(id);
+    if(sh) ensureShapeVisible(sh);
     var layer = layerById[id];
     if(!layer) return;
     map.flyToBounds(layer.getBounds(), { padding:[60,60], maxZoom:17 });
@@ -3366,6 +3610,9 @@
     document.getElementById('compassBtn').style.transform = 'rotate(' + (-map.getBearing()) + 'deg)';
   });
   shapes = loadShapes();
+  mapFilter = loadMapFilter();
+  mapFilterWords = searchWords(mapFilter);
+  if(!mapFilterWords.length) mapFilter = '';
   redrawAll();
   updateSyncMenuLabel();
   syncCode = loadSyncCode();
